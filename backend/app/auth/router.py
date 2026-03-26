@@ -1,0 +1,191 @@
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db
+from app.redis_client import redis_client
+from app.config import settings
+from app.auth import schemas, service, utils
+from app.auth.dependencies import get_current_user, get_current_vendor, get_current_user_or_vendor
+
+router = APIRouter()
+
+def check_otp_rate_limit(register_number: str):
+    count = redis_client.get(f"otp_count:{register_number}")
+    if count and int(count) >= 3:
+        raise HTTPException(status_code=429, detail="Too many OTP requests. Try again after 1 hour.")
+
+def increment_otp_count(register_number: str):
+    key = f"otp_count:{register_number}"
+    count = redis_client.incr(key)
+    if count == 1:
+        redis_client.expire(key, 3600)
+
+@router.post("/register")
+async def register(data: schemas.StudentRegister, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    if not utils.validate_register_number(data.register_number):
+        raise HTTPException(status_code=400, detail="Invalid register number format")
+
+    existing_user = await service.get_user_by_register_number(db, data.register_number)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Register number already registered")
+
+    if data.email:
+        if not data.email.endswith(f"@{settings.COLLEGE_EMAIL_DOMAIN}"):
+            raise HTTPException(status_code=400, detail=f"Email must end with @{settings.COLLEGE_EMAIL_DOMAIN}")
+        existing_email = await service.get_user_by_email(db, data.email)
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        check_otp_rate_limit(data.register_number)
+
+    user = await service.create_user(db, data)
+
+    if data.email:
+        otp = utils.generate_otp()
+        redis_client.set(f"otp:{data.register_number}", otp, ex=600)
+        increment_otp_count(data.register_number)
+        background_tasks.add_task(service.send_otp_email, data.email, data.name, otp, "verify")
+        return {"message": "User registered successfully. OTP sent.", "user_id": str(user.id), "requires_otp": True}
+    
+    return {"message": "User registered successfully.", "user_id": str(user.id), "requires_otp": False}
+
+@router.post("/verify-otp")
+async def verify_otp(data: schemas.VerifyOTP, db: AsyncSession = Depends(get_db)):
+    key = f"otp:{data.register_number}"
+    stored_otp = redis_client.get(key)
+    
+    if not stored_otp:
+        raise HTTPException(status_code=400, detail="OTP expired")
+    
+    if str(stored_otp) != str(data.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    await service.mark_user_verified(db, data.register_number)
+    redis_client.delete(key)
+    return {"message": "Email verified successfully"}
+
+@router.post("/resend-otp")
+async def resend_otp(data: schemas.ResendOTP, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    check_otp_rate_limit(data.register_number)
+    user = await service.get_user_by_register_number(db, data.register_number)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.email:
+        raise HTTPException(status_code=400, detail="User has no email registered")
+        
+    otp = utils.generate_otp()
+    redis_client.set(f"otp:{data.register_number}", otp, ex=600)
+    increment_otp_count(data.register_number)
+    background_tasks.add_task(service.send_otp_email, user.email, user.name, otp, "verify")
+    return {"message": "OTP resent successfully"}
+
+@router.post("/forgot-password")
+async def forgot_password(data: schemas.ForgotPassword, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    user = await service.get_user_by_email(db, data.email)
+    msg = "If that email is registered, an OTP has been sent"
+    if user:
+        try:
+            check_otp_rate_limit(user.register_number)
+            otp = utils.generate_otp()
+            redis_client.set(f"reset:{user.register_number}", otp, ex=600)
+            increment_otp_count(user.register_number)
+            background_tasks.add_task(service.send_otp_email, user.email, user.name, otp, "reset")
+        except HTTPException:
+            pass
+    return {"message": msg}
+
+@router.post("/reset-password")
+async def reset_password(data: schemas.ResetPassword, db: AsyncSession = Depends(get_db)):
+    key = f"reset:{data.register_number}"
+    stored_otp = redis_client.get(key)
+    
+    if not stored_otp:
+        raise HTTPException(status_code=400, detail="OTP expired or not requested")
+        
+    if str(stored_otp) != str(data.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    await service.reset_user_password(db, data.register_number, data.new_password)
+    redis_client.delete(key)
+    return {"message": "Password reset successfully"}
+
+@router.post("/login", response_model=schemas.TokenResponse)
+async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
+    user = await service.authenticate_user(db, data.register_number, data.password)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid register number or password")
+    
+    if not user.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email first")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
+        
+    access_token = utils.create_access_token({"sub": str(user.id), "role": user.role})
+    refresh_token = utils.create_refresh_token({"sub": str(user.id), "role": user.role})
+    
+    redis_client.set(f"refresh:{user.id}", refresh_token, ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "role": user.role,
+        "user_id": str(user.id),
+        "name": user.name,
+        "must_change_password": False
+    }
+
+@router.post("/vendor/login", response_model=schemas.TokenResponse)
+async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get_db)):
+    vendor = await service.authenticate_vendor(db, data.phone, data.password)
+    if not vendor:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid phone or password")
+        
+    if not vendor.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
+        
+    access_token = utils.create_access_token({"sub": str(vendor.id), "role": "vendor"})
+    refresh_token = utils.create_refresh_token({"sub": str(vendor.id), "role": "vendor"})
+    
+    redis_client.set(f"refresh:{vendor.id}", refresh_token, ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "role": "vendor",
+        "user_id": str(vendor.id),
+        "name": vendor.name,
+        "must_change_password": vendor.must_change_password
+    }
+
+@router.post("/vendor/change-password")
+async def vendor_change_password(data: schemas.VendorChangePassword, current_vendor = Depends(get_current_vendor), db: AsyncSession = Depends(get_db)):
+    if not utils.verify_password(data.old_password, current_vendor.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid old password")
+        
+    current_vendor.password_hash = utils.hash_password(data.new_password)
+    current_vendor.must_change_password = False
+    await db.commit()
+    return {"message": "Password changed successfully"}
+
+@router.post("/refresh")
+async def refresh_token(data: schemas.RefreshRequest):
+    try:
+        payload = utils.decode_token(data.refresh_token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        
+    user_id = payload.get("sub")
+    role = payload.get("role")
+    
+    if not user_id or payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid refresh token payload")
+        
+    stored_token = redis_client.get(f"refresh:{user_id}")
+    if not stored_token or str(stored_token) != data.refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
+        
+    access_token = utils.create_access_token({"sub": user_id, "role": role})
+    return {"access_token": access_token}
+
+@router.post("/logout")
+async def logout(current = Depends(get_current_user_or_vendor)):
+    redis_client.delete(f"refresh:{current.id}")
+    return {"message": "Logged out successfully"}
