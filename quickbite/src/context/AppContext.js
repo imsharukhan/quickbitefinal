@@ -6,13 +6,14 @@ import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
 
+const PLATFORM_FEE = 7;
+const PLATFORM_UPI_ID = 'sharukhansharukhan926@oksbi';
+const PLATFORM_UPI_NAME = 'QuickBite';
+
 export function AppProvider({ children }) {
     const { isLoggedIn } = useAuth();
     
-    // Legacy cart
     const [cart, setCart] = useState([]);
-    
-    // New states
     const [orders, setOrders] = useState([]);
     const [notifications, setNotifications] = useState([]);
     const [upiDeepLink, setUpiDeepLink] = useState('');
@@ -56,8 +57,11 @@ export function AppProvider({ children }) {
 
     useEffect(() => {
         if (isLoggedIn) {
-            loadOrders();
-            loadNotifications();
+            const role = localStorage.getItem('qb_role');
+            if (role !== 'vendor') {
+                loadOrders();
+                loadNotifications();
+            }
         } else {
             setOrders([]);
             setNotifications([]);
@@ -84,21 +88,23 @@ export function AppProvider({ children }) {
             return [...prev, { ...item, quantity: 1, outletId, outletName }];
         });
         
-        if (conflict) {
-            return { conflict: true, existingOutlet };
-        }
+        if (conflict) return { conflict: true, existingOutlet };
         return { conflict: false };
     }, []);
 
     const removeFromCart = useCallback((itemId) => setCart(prev => prev.filter(ci => ci.id !== itemId)), []);
+    
     const updateCartQuantity = useCallback((itemId, quantity) => {
         if (quantity <= 0) setCart(prev => prev.filter(ci => ci.id !== itemId));
         else setCart(prev => prev.map(ci => ci.id === itemId ? { ...ci, quantity } : ci));
     }, []);
+    
     const clearCart = useCallback(() => setCart([]), []);
 
     const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+    // Total including platform fee — used for payment
+    const grandTotal = cartTotal + PLATFORM_FEE;
 
     const placeOrder = async (pickup_time) => {
         if (isSubmittingRef.current) return;
@@ -110,8 +116,14 @@ export function AppProvider({ children }) {
             const items = cart.map(i => ({ menu_item_id: i.id, quantity: i.quantity }));
             
             const response = await orderService.placeOrder(outlet_id, items, pickup_time);
-            setUpiDeepLink(response.upi_deep_link || '');
-            setLastPlacedOrder(response);
+
+            // Build UPI deep link with platform UPI ID and grand total (items + platform fee)
+            const totalWithFee = (response.total || cartTotal) + PLATFORM_FEE;
+            const deepLink = `upi://pay?pa=${PLATFORM_UPI_ID}&pn=${encodeURIComponent(PLATFORM_UPI_NAME)}&am=${totalWithFee}&cu=INR&tn=QuickBite%20${response.id}%20Token%23${response.token_number}`;
+            
+            setUpiDeepLink(deepLink);
+            // Store grandTotal on the order object for display
+            setLastPlacedOrder({ ...response, displayTotal: totalWithFee });
             clearCart();
             await loadOrders();
             return response;
@@ -124,25 +136,26 @@ export function AppProvider({ children }) {
         try {
             await notificationService.markAsRead(id);
             await loadNotifications();
-        } catch(e){}
+        } catch(e) {}
     };
 
     const markAllNotificationsRead = async () => {
         try {
             await notificationService.markAllRead();
             await loadNotifications();
-        } catch(e){}
+        } catch(e) {}
     };
 
     const unreadCount = notifications.filter(n => !n.is_read).length;
 
     return (
         <AppContext.Provider value={{
-            cart, addToCart, removeFromCart, updateCartQuantity, clearCart, cartTotal, cartCount,
+            cart, addToCart, removeFromCart, updateCartQuantity, clearCart,
+            cartTotal, cartCount, grandTotal, platformFee: PLATFORM_FEE,
             orders, setOrders, placeOrder, loadOrders, isOrdersLoading,
             upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder,
-            notifications, markNotificationRead, markAllNotificationsRead, unreadCount, isNotifsLoading,
-            isSubmittingRef
+            notifications, markNotificationRead, markAllNotificationsRead,
+            unreadCount, isNotifsLoading, isSubmittingRef
         }}>
             {children}
         </AppContext.Provider>

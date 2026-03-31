@@ -1,8 +1,10 @@
 'use client';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Navbar({ currentPage, navigate }) {
-    const { role, setRole, cartCount, unreadCount } = useApp();
+    const { cartCount, unreadCount } = useApp();
+    const { role } = useAuth();
 
     return (
         <nav className="navbar">
@@ -12,7 +14,9 @@ export default function Navbar({ currentPage, navigate }) {
             </div>
 
             <div className="navbar-center">
-                {role === 'student' ? (
+                {role === 'vendor' ? (
+                    <button className="nav-link active">Dashboard</button>
+                ) : (
                     <>
                         <button className={`nav-link ${currentPage === 'home' ? 'active' : ''}`} onClick={() => navigate('home')}>
                             Home
@@ -20,29 +24,18 @@ export default function Navbar({ currentPage, navigate }) {
                         <button className={`nav-link ${currentPage === 'orders' ? 'active' : ''}`} onClick={() => navigate('orders')}>
                             My Orders
                         </button>
-                        <button className={`nav-link ${currentPage === 'profile' ? 'active' : ''}`} onClick={() => navigate('profile')}>
-                            Profile
-                        </button>
                         <button className={`nav-link ${currentPage === 'budget' ? 'active' : ''}`} onClick={() => navigate('budget')}>
                             Budget
                         </button>
+                        <button className={`nav-link ${currentPage === 'profile' ? 'active' : ''}`} onClick={() => navigate('profile')}>
+                            Profile
+                        </button>
                     </>
-                ) : (
-                    <button className="nav-link active">Dashboard</button>
                 )}
             </div>
 
             <div className="navbar-actions">
-                <div className="role-switcher">
-                    <button className={`role-btn ${role === 'student' ? 'active' : ''}`} onClick={() => { setRole('student'); navigate('home'); }}>
-                        Student
-                    </button>
-                    <button className={`role-btn ${role === 'vendor' ? 'active' : ''}`} onClick={() => setRole('vendor')}>
-                        Vendor
-                    </button>
-                </div>
-
-                {role === 'student' && (
+                {role !== 'vendor' && (
                     <>
                         <button className="icon-btn" onClick={() => navigate('notifications')} title="Notifications">
                             🔔

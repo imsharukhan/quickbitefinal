@@ -9,6 +9,10 @@ from datetime import datetime, timedelta
 
 IST = pytz.timezone('Asia/Kolkata')
 
+# Fixed order window — students can only order for 11:00 AM to 2:30 PM
+ORDER_WINDOW_START = (11, 0)   # 11:00 AM
+ORDER_WINDOW_END   = (14, 30)  # 2:30 PM
+
 async def create_outlet(db: AsyncSession, data: OutletCreate) -> Outlet:
     new_outlet = Outlet(
         vendor_id=data.vendor_id,
@@ -44,11 +48,9 @@ async def update_outlet(db: AsyncSession, id: str, data: OutletUpdate) -> Outlet
     outlet = await get_outlet_by_id(db, id)
     if not outlet:
         return None
-        
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(outlet, key, value)
-        
     await db.commit()
     await db.refresh(outlet)
     return outlet
@@ -66,7 +68,6 @@ async def recalculate_rating(db: AsyncSession, outlet_id: str):
     outlet = await get_outlet_by_id(db, outlet_id)
     if not outlet:
         return
-        
     result = await db.execute(
         select(func.avg(Rating.stars)).where(Rating.outlet_id == outlet_id)
     )
@@ -84,43 +85,41 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
     outlet = await get_outlet_by_id(db, outlet_id)
     if not outlet or not outlet.is_open:
         return []
-        
+
     now = datetime.now(IST)
-    
+
     if not date_str:
         target_date = now.date()
     else:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        
-    try:
-        opening_time_parts = outlet.opening_time.split(":")
-        closing_time_parts = outlet.closing_time.split(":")
-        
-        opening_dt = IST.localize(datetime(
-            target_date.year, target_date.month, target_date.day,
-            int(opening_time_parts[0]), int(opening_time_parts[1])
-        ))
-        
-        closing_dt = IST.localize(datetime(
-            target_date.year, target_date.month, target_date.day,
-            int(closing_time_parts[0]), int(closing_time_parts[1])
-        ))
-    except (ValueError, IndexError):
+
+    # Fixed order window: 11:00 AM to 2:30 PM IST
+    order_start_dt = IST.localize(datetime(
+        target_date.year, target_date.month, target_date.day,
+        ORDER_WINDOW_START[0], ORDER_WINDOW_START[1]
+    ))
+    order_end_dt = IST.localize(datetime(
+        target_date.year, target_date.month, target_date.day,
+        ORDER_WINDOW_END[0], ORDER_WINDOW_END[1]
+    ))
+
+    # If today and already past 2:30 PM, no slots available
+    if target_date == now.date() and now > order_end_dt:
         return []
-    
-    if now > closing_dt and target_date == now.date():
-        return []
-        
+
+    slot_duration = outlet.slot_duration_minutes or 15
+
     slots = []
-    current_slot = opening_dt
-    
-    while current_slot <= closing_dt:
+    current_slot = order_start_dt
+
+    while current_slot <= order_end_dt:
+        # Only show slots at least 30 min in the future (for today)
         if target_date > now.date() or current_slot >= now + timedelta(minutes=30):
             slot_time_str = current_slot.strftime("%I:%M %p")
-            
+
             start_of_day = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
             start_of_day_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
-            
+
             result = await db.execute(
                 select(func.count(Order.id)).where(
                     Order.outlet_id == outlet.id,
@@ -130,17 +129,18 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
                 )
             )
             count = result.scalar()
-            
+
             available = outlet.max_orders_per_slot - count
             is_full = available <= 0
-            
+
+            # Only include slots that are not full
             if not is_full:
                 slots.append({
                     "time": slot_time_str,
                     "available_slots": available,
-                    "is_full": is_full
+                    "is_full": False
                 })
-                
-        current_slot += timedelta(minutes=outlet.slot_duration_minutes)
-        
+
+        current_slot += timedelta(minutes=slot_duration)
+
     return slots

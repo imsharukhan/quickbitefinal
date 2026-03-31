@@ -80,3 +80,6 @@ export const logout = async () => {
 export const refreshToken = (refresh_token) => {
   return api.post('/api/auth/refresh', { refresh_token });
 };
+export const getMe = () => {
+  return api.get('/api/users/me');
+};

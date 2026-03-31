@@ -29,6 +29,11 @@ export function AuthProvider({ children }) {
       setRole(role)
       setIsLoggedIn(true)
       setMustChangePassword(mustChange)
+      if (role !== 'vendor') {
+        authService.getMe().then(res => {
+          setUser(prev => ({ ...prev, ...res.data }))
+        }).catch(() => {})
+      }
     } else {
       // No valid token - clear everything and show login
       setUser(null)
@@ -66,6 +71,9 @@ export function AuthProvider({ children }) {
     setRole(res.data.role);
     setIsLoggedIn(true);
     setMustChangePassword(res.data.must_change_password || false);
+    authService.getMe().then(r => {
+      setUser(prev => ({ ...prev, ...r.data }))
+    }).catch(() => {});
     return res.data;
   };
 

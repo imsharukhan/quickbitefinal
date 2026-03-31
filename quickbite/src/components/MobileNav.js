@@ -1,17 +1,24 @@
 'use client';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function MobileNav({ currentPage, navigate }) {
     const { cartCount, unreadCount } = useApp();
+    const { role } = useAuth();
 
-    const items = [
+    const studentItems = [
         { id: 'home', icon: '🏠', label: 'Home' },
         { id: 'orders', icon: '📋', label: 'Orders' },
         { id: 'cart', icon: '🛒', label: 'Cart', badge: cartCount },
         { id: 'notifications', icon: '🔔', label: 'Alerts', badge: unreadCount },
-        { id: 'budget', icon: '📊', label: 'Budget' },
         { id: 'profile', icon: '👤', label: 'Profile' },
     ];
+
+    const vendorItems = [
+        { id: 'vendor', icon: '📊', label: 'Dashboard' },
+    ];
+
+    const items = role === 'vendor' ? vendorItems : studentItems;
 
     return (
         <div className="mobile-nav">

@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from fastapi import HTTPException
+from datetime import timedelta
 from app.orders.models import Order, OrderItem, Rating
 from app.outlets.models import Outlet
 from app.menu.models import MenuItem
@@ -196,7 +197,7 @@ async def get_orders_by_outlet(db: AsyncSession, outlet_id: str, status: str = N
     target_date = today_ist if not date_str else datetime.strptime(date_str, "%Y-%m-%d").date()
     
     start_of_day = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
-    end_of_day = start_of_day + pytz.timedelta(days=1)
+    end_of_day = start_of_day + timedelta(days=1)
     
     start_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
     end_utc = end_of_day.astimezone(pytz.UTC).replace(tzinfo=None)

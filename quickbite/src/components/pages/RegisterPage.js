@@ -41,7 +41,7 @@ export default function RegisterPage({ navigate }) {
     setError('');
     
     try {
-      const res = await registerUser(name, regNo, email, password);
+      const res = await registerUser(name, regNo, email || null, password);
       if (res.requires_otp) {
         setStep(2);
         setTimer(60);
@@ -50,7 +50,12 @@ export default function RegisterPage({ navigate }) {
         setTimeout(() => navigate('login'), 2000);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Registration failed');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail[0]?.msg || 'Registration failed');
+      } else {
+        setError(detail || err.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -66,8 +71,13 @@ export default function RegisterPage({ navigate }) {
       await verifyOTP(regNo, code);
       setSuccess('Email verified! Redirecting to login...');
       setTimeout(() => navigate('login'), 2000);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid OTP');
+    }  catch (err) {
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail[0]?.msg || 'Invalid OTP');
+      } else {
+        setError(detail || 'Invalid OTP');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,7 +89,8 @@ export default function RegisterPage({ navigate }) {
       await resendOTP(regNo);
       setTimer(60);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to resend');
+      const detail = err.response?.data?.detail;
+      setError(Array.isArray(detail) ? detail[0]?.msg : detail || 'Failed to resend');
     }
   };
 
