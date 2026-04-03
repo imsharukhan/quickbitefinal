@@ -61,40 +61,17 @@ async def reset_user_password(db: AsyncSession, register_number: str, new_passwo
         user.password_hash = hash_password(new_password)
         await db.commit()
 
-async def send_otp_email(email: str, name: str, otp: str, purpose: str = "verify"):
-    msg = EmailMessage()
-    subject = "Verify your QuickBite account" if purpose == "verify" else "Reset your QuickBite password"
-    msg["Subject"] = subject
-    msg["From"] = settings.GMAIL_ADDRESS
-    msg["To"] = email
+async def reset_vendor_password_otp(db: AsyncSession, phone: str, new_password: str):
+    vendor = await get_vendor_by_phone(db, phone)
+    if vendor:
+        vendor.password_hash = hash_password(new_password)
+        await db.commit()
 
-    html_content = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px;">
-        <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-          <div style="background-color: orange; padding: 15px; text-align: center; border-radius: 8px 8px 0 0;">
-            <h1 style="color: white; margin: 0;">QuickBite</h1>
-          </div>
-          <div style="padding: 20px; text-align: center;">
-            <h2>Hi {name},</h2>
-            <p>{subject}. Use the OTP below:</p>
-            <div style="margin: 20px 0;">
-              <span style="background-color: #fff3e0; color: orange; font-size: 2.5rem; letter-spacing: 12px; padding: 10px 20px; border: 2px dashed orange; border-radius: 8px; font-weight: bold;">{otp}</span>
-            </div>
-            <p style="color: #666;">Valid for 10 minutes</p>
-            <p style="font-size: 0.9em; color: dimgray; margin-top: 30px;">Do not share this OTP with anyone.</p>
-          </div>
-        </div>
-      </body>
-    </html>
-    """
-    msg.set_content(html_content, subtype="html")
-
-    await aiosmtplib.send(
-        msg,
-        hostname="smtp.gmail.com",
-        port=587,
-        start_tls=True,
-        username=settings.GMAIL_ADDRESS,
-        password=settings.GMAIL_APP_PASSWORD,
-    )
+async def send_otp_email(email_or_phone: str, name: str, otp: str, purpose: str = "verify"):
+    # [DEMO MODE] - Print OTP directly to terminal instead of using SMS/Email API
+    action = "Verification" if purpose == "verify" else "Reset"
+    print("\n" + "="*50)
+    print(f"[DEMO MODE] QUICKBITE OTP ({action})")
+    print(f"Recipient: {name} ({email_or_phone})")
+    print(f"Your 6-digit OTP is: {otp}")
+    print("="*50 + "\n")

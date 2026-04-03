@@ -5,7 +5,7 @@ import re
 class StudentRegister(BaseModel):
     name: str
     register_number: str
-    email: Optional[EmailStr] = None
+    email: EmailStr
     password: str
     role: Literal["student", "staff"] = "student"
 
@@ -40,6 +40,21 @@ class ResendOTP(BaseModel):
 
 class ForgotPassword(BaseModel):
     email: EmailStr
+
+class VendorForgotPassword(BaseModel):
+    phone: str
+
+class VendorResetPassword(BaseModel):
+    phone: str
+    otp: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_val(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters")
+        return v
 
 class ResetPassword(BaseModel):
     register_number: str

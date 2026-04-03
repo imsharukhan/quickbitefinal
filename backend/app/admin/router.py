@@ -124,7 +124,7 @@ async def list_orders(
             "id": o.id,
             "student_name": student_name,
             "outlet_name": outlet_name,
-            "total": o.total,
+            "total_price": o.total_price,
             "status": o.status,
             "payment_status": o.payment_status,
             "placed_at": o.placed_at
@@ -149,13 +149,13 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     res_orders = await db.execute(select(func.count(Order.id)))
     total_orders = res_orders.scalar() or 0
     
-    res_total_rev = await db.execute(select(func.sum(Order.total)).where(Order.status != 'Cancelled'))
+    res_total_rev = await db.execute(select(func.sum(Order.total_price)).where(Order.status != 'Cancelled'))
     total_revenue = res_total_rev.scalar() or 0.0
     
     res_orders_today = await db.execute(select(func.count(Order.id)).where(Order.placed_at >= start_utc))
     orders_today = res_orders_today.scalar() or 0
     
-    res_rev_today = await db.execute(select(func.sum(Order.total)).where(Order.status != 'Cancelled', Order.placed_at >= start_utc))
+    res_rev_today = await db.execute(select(func.sum(Order.total_price)).where(Order.status != 'Cancelled', Order.placed_at >= start_utc))
     revenue_today = res_rev_today.scalar() or 0.0
     
     res_active = await db.execute(select(func.count(Order.id)).where(Order.status.notin_(['Picked Up', 'Cancelled'])))

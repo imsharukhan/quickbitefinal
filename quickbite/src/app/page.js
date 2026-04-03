@@ -17,6 +17,7 @@ import Toast from '@/components/Toast';
 import LoginPage from '@/components/pages/LoginPage';
 import RegisterPage from '@/components/pages/RegisterPage';
 import ForgotPasswordPage from '@/components/pages/ForgotPasswordPage';
+import VendorForgotPage from '@/components/pages/VendorForgotPage';
 import VendorChangePasswordPage from '@/components/pages/VendorChangePasswordPage';
 import AdminPage from '@/components/pages/AdminPage';
 
@@ -91,6 +92,7 @@ export default function Page() {
   if (!isLoggedIn) {
     if (authPage === 'register') return <RegisterPage navigate={setAuthPage} />;
     if (authPage === 'forgot') return <ForgotPasswordPage navigate={setAuthPage} />;
+    if (authPage === 'vendor-forgot') return <VendorForgotPage navigate={setAuthPage} />;
     return <LoginPage navigate={setAuthPage} />;
   }
 

@@ -63,7 +63,9 @@ api.interceptors.response.use(
           if (typeof window !== 'undefined') {
             const refreshToken = localStorage.getItem('qb_refresh');
             if (!refreshToken || refreshToken === 'null' || refreshToken === 'undefined') {
-              throw new Error('No refresh token available');
+              clearAuthData();
+              window.dispatchEvent(new Event('auth:logout'));
+              return reject({ response: { status: 401 } });
             }
             
             axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/refresh`, {

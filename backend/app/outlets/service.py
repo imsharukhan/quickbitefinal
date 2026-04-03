@@ -9,9 +9,9 @@ from datetime import datetime, timedelta
 
 IST = pytz.timezone('Asia/Kolkata')
 
-# Fixed order window — students can only order for 11:00 AM to 2:30 PM
+# Fixed order window — students can only order for 11:00 AM to 3:00 PM
 ORDER_WINDOW_START = (11, 0)   # 11:00 AM
-ORDER_WINDOW_END   = (14, 30)  # 2:30 PM
+ORDER_WINDOW_END   = (15, 0)   # 3:00 PM
 
 async def create_outlet(db: AsyncSession, data: OutletCreate) -> Outlet:
     new_outlet = Outlet(
@@ -23,7 +23,6 @@ async def create_outlet(db: AsyncSession, data: OutletCreate) -> Outlet:
         opening_time=data.opening_time,
         closing_time=data.closing_time,
         slot_duration_minutes=data.slot_duration_minutes,
-        max_orders_per_slot=data.max_orders_per_slot,
         image_url=data.image_url,
         is_open=True
     )
@@ -93,7 +92,7 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
     else:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
 
-    # Fixed order window: 11:00 AM to 2:30 PM IST
+    # Fixed order window: 11:00 AM to 3:00 PM IST
     order_start_dt = IST.localize(datetime(
         target_date.year, target_date.month, target_date.day,
         ORDER_WINDOW_START[0], ORDER_WINDOW_START[1]
@@ -103,7 +102,7 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
         ORDER_WINDOW_END[0], ORDER_WINDOW_END[1]
     ))
 
-    # If today and already past 2:30 PM, no slots available
+    # If today and already past 3:00 PM, no slots available
     if target_date == now.date() and now > order_end_dt:
         return []
 
@@ -113,33 +112,13 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
     current_slot = order_start_dt
 
     while current_slot <= order_end_dt:
-        # Only show slots at least 30 min in the future (for today)
-        if target_date > now.date() or current_slot >= now + timedelta(minutes=30):
-            slot_time_str = current_slot.strftime("%I:%M %p")
+        slot_time_str = current_slot.strftime("%I:%M %p")
 
-            start_of_day = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
-            start_of_day_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
-
-            result = await db.execute(
-                select(func.count(Order.id)).where(
-                    Order.outlet_id == outlet.id,
-                    Order.pickup_time == slot_time_str,
-                    Order.placed_at >= start_of_day_utc,
-                    Order.status != "Cancelled"
-                )
-            )
-            count = result.scalar()
-
-            available = outlet.max_orders_per_slot - count
-            is_full = available <= 0
-
-            # Only include slots that are not full
-            if not is_full:
-                slots.append({
-                    "time": slot_time_str,
-                    "available_slots": available,
-                    "is_full": False
-                })
+        slots.append({
+            "time": slot_time_str,
+            "available_slots": 999,
+            "is_full": False
+        })
 
         current_slot += timedelta(minutes=slot_duration)
 

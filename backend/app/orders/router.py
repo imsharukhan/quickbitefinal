@@ -63,12 +63,13 @@ async def get_order_by_id(
 @router.patch("/{order_id}/confirm-payment", response_model=schemas.OrderResponse)
 async def confirm_payment(
     order_id: str,
-    data: schemas.PaymentConfirm,
+    data: Optional[schemas.PaymentConfirm] = None,
     current_vendor = Depends(get_current_vendor),
     db: AsyncSession = Depends(get_db)
 ):
+    payment_gateway_id = data.payment_gateway_id if data else None
     order = await service.confirm_payment_and_prepare(
-        db, order_id, str(current_vendor.id), data.payment_gateway_id
+        db, order_id, str(current_vendor.id), payment_gateway_id
     )
     
     await manager.notify_student(
@@ -77,6 +78,7 @@ async def confirm_payment(
             "type": "STATUS_UPDATE",
             "order_id": order_id,
             "status": "Preparing",
+            "payment_status": "PAID",
             "message": "Payment confirmed! Your food is being prepared 🍳"
         }
     )
@@ -98,17 +100,19 @@ async def update_status(
         msg = f"Order #{order['token_number']} is ready! Come pick it up 🎉"
     elif data.status == "Picked Up":
         msg = f"Order #{order['token_number']} picked up! Enjoy your meal 😊 Rate us ⭐"
+    else:
+        msg = f"Order #{order['token_number']} status updated to {data.status}!"
     
-    if msg:
-        await manager.notify_student(
-            str(order["user_id"]),
-            {
-                "type": "STATUS_UPDATE",
-                "order_id": order_id,
-                "status": data.status,
-                "message": msg
-            }
-        )
+    await manager.notify_student(
+        str(order["user_id"]),
+        {
+            "type": "STATUS_UPDATE",
+            "order_id": order_id,
+            "status": data.status,
+            "payment_status": order.get("payment_status", "PAID"),
+            "message": msg
+        }
+    )
     return order
 
 @router.patch("/{order_id}/cancel", response_model=schemas.OrderResponse)
@@ -173,9 +177,11 @@ async def student_websocket(websocket: WebSocket, user_id: str, token: str = Que
     try:
         payload = decode_token(token)
         if payload.get("role") not in ["student", "staff"] or payload.get("sub") != user_id:
+            await websocket.accept()
             await websocket.close(code=4001)
             return
     except Exception:
+        await websocket.accept()
         await websocket.close(code=4001)
         return
 
@@ -198,9 +204,11 @@ async def vendor_websocket(websocket: WebSocket, vendor_id: str, token: str = Qu
     try:
         payload = decode_token(token)
         if payload.get("role") != "vendor" or payload.get("sub") != vendor_id:
+            await websocket.accept()
             await websocket.close(code=4001)
             return
     except Exception:
+        await websocket.accept()
         await websocket.close(code=4001)
         return
 

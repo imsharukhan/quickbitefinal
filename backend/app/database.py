@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text
 from app.config import settings
 
 engine = create_async_engine(
@@ -34,3 +35,11 @@ async def get_db():
 async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Auto-Migration Hack for Neon DB
+        try:
+            await conn.execute(text("ALTER TABLE orders RENAME COLUMN total TO total_price"))
+        except Exception:
+            try:
+                await conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_price FLOAT DEFAULT 0.0"))
+            except Exception as e:
+                print("Migration Notice:", e)

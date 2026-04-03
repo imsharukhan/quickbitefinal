@@ -109,7 +109,7 @@ async def reset_password(data: schemas.ResetPassword, db: AsyncSession = Depends
 async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
     user = await service.authenticate_user(db, data.register_number, data.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid register number or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect roll number or password.")
     
     if not user.is_verified:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email first")
@@ -134,7 +134,7 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
 async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get_db)):
     vendor = await service.authenticate_vendor(db, data.phone, data.password)
     if not vendor:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid phone or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect roll number or password.")
         
     if not vendor.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
@@ -162,6 +162,47 @@ async def vendor_change_password(data: schemas.VendorChangePassword, current_ven
     current_vendor.must_change_password = False
     await db.commit()
     return {"message": "Password changed successfully"}
+
+@router.post("/vendor/forgot-password")
+async def vendor_forgot_password(data: schemas.VendorForgotPassword, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    vendor = await service.get_vendor_by_phone(db, data.phone)
+    msg = "If that phone is registered, an OTP has been sent."
+    if vendor:
+        try:
+            check_otp_rate_limit(vendor.phone)
+            otp = utils.generate_otp()
+            redis_client.set(f"reset_vendor:{vendor.phone}", otp, ex=600)
+            increment_otp_count(vendor.phone)
+            background_tasks.add_task(service.send_otp_email, vendor.phone, vendor.name, otp, "reset")
+        except HTTPException:
+            pass
+    return {"message": msg}
+
+@router.post("/vendor/reset-password")
+async def vendor_reset_password(data: schemas.VendorResetPassword, db: AsyncSession = Depends(get_db)):
+    key = f"reset_vendor:{data.phone}"
+    stored_otp = redis_client.get(key)
+    
+    if not stored_otp:
+        raise HTTPException(status_code=400, detail="OTP expired or not requested")
+        
+    if str(stored_otp) != str(data.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    await service.reset_vendor_password_otp(db, data.phone, data.new_password)
+    redis_client.delete(key)
+    return {"message": "Password reset successfully"}
+
+@router.post("/vendor/reset-password/admin", tags=["admin"])
+async def reset_vendor_password(phone: str, new_password: str, db: AsyncSession = Depends(get_db)):
+    """ Campus Admin-Only Endpoint: Reset vendor credentials for security """
+    vendor = await service.get_vendor_by_phone(db, phone)
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    vendor.password_hash = utils.hash_password(new_password)
+    vendor.must_change_password = True
+    await db.commit()
+    return {"message": "Vendor password completely reset by Admin. Vendor forced to change on next login."}
 
 @router.post("/refresh")
 async def refresh_token(data: schemas.RefreshRequest):

@@ -25,6 +25,8 @@ from app.admin.router import router as admin_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
+    from app.database import Base
+    print("Recognized tables:", list(Base.metadata.tables.keys()))
     yield
 
 app = FastAPI(title="QuickBite API", lifespan=lifespan)

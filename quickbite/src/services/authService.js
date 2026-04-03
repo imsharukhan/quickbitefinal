@@ -59,6 +59,14 @@ export const resetPassword = (register_number, otp, new_password) => {
   return api.post('/api/auth/reset-password', { register_number, otp, new_password });
 };
 
+export const vendorForgotPassword = (phone) => {
+  return api.post('/api/auth/vendor/forgot-password', { phone });
+};
+
+export const vendorResetPassword = (phone, otp, new_password) => {
+  return api.post('/api/auth/vendor/reset-password', { phone, otp, new_password });
+};
+
 export const vendorLogin = (phone, password) => {
   return api.post('/api/auth/vendor/login', { phone, password });
 };

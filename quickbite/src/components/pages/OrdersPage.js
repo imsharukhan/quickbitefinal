@@ -1,21 +1,45 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import * as orderService from '@/services/orderService';
 import { Clock, RefreshCw } from 'lucide-react';
 
 const PLATFORM_FEE = 7;
 
 export default function OrdersPage({ navigate, showToast }) {
-  const { orders, loadOrders, isOrdersLoading } = useApp();
+  const { orders, setOrders, loadOrders, isOrdersLoading } = useApp();
   const [ratingState, setRatingState] = useState({ id: null, stars: 5, review: '' });
   const [cancelingId, setCancelingId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+
+  const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+
+  const { user } = useAuth();
+  const { lastMessage } = useWebSocket('student', user?.id);
+
+  useEffect(() => {
+    if (lastMessage?.type === 'STATUS_UPDATE') {
+      setOrders(prev => prev.map(order => 
+        order.id === lastMessage.order_id 
+          ? { ...order, status: lastMessage.status, payment_status: lastMessage.payment_status || order.payment_status } 
+          : order
+      ));
+      if (showToast) showToast(lastMessage.message || `Order status updated to ${lastMessage.status}!`, 'success');
+    }
+  }, [lastMessage]); // Removed unstable dependencies to prevent network storms
+
+  const generateUpiLink = (order) => {
+    const upiId = order.outlet_upi_id || 'sharukhansharukhan926@oksbi';
+    const name = encodeURIComponent(order.outlet_name || 'QuickBite');
+    return `upi://pay?pa=${upiId}&pn=${name}&am=${order.total_price}&cu=INR`;
+  };
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(() => loadOrders(), 60000);
-    return () => clearInterval(interval);
-  }, []);
+    // Removed legacy interval polling; WebSocket handles real-time sync instantly!
+  }, []); // Empty dependency array permanently kills infinite fetch loops
 
   const handleCancel = async (id) => {
     if (window.confirm("Cancel this order?")) {
@@ -76,8 +100,6 @@ export default function OrdersPage({ navigate, showToast }) {
           const isPlaced = order.status === 'Placed';
           const canCancel = isPlaced && order.payment_status === 'PENDING';
           const canRate = order.status === 'Picked Up' && !order.rating;
-          // Show total with platform fee
-          const displayTotal = (order.total || 0) + PLATFORM_FEE;
 
           return (
             <div key={order.id} className="order-card" style={{ background: 'white', borderRadius: 'var(--radius-lg)', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
@@ -113,10 +135,10 @@ export default function OrdersPage({ navigate, showToast }) {
                   <span className={`order-status-badge ${order.status.replace(/\s+/g, '_').toLowerCase()}`} style={{ fontWeight: 700 }}>{order.status}</span>
                   <span style={{
                     fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px',
-                    background: order.payment_status === 'PAID' ? '#E8F5E9' : '#FFF8E1',
-                    color: order.payment_status === 'PAID' ? '#2E7D32' : '#F57F17', fontWeight: 700
+                    background: (order.payment_status === 'PAID' || ['Preparing', 'Ready for Pickup', 'Picked Up'].includes(order.status)) ? '#E8F5E9' : (order.status === 'Cancelled' ? '#ffebee' : '#FFF8E1'),
+                    color: (order.payment_status === 'PAID' || ['Preparing', 'Ready for Pickup', 'Picked Up'].includes(order.status)) ? '#2E7D32' : (order.status === 'Cancelled' ? '#d84315' : '#F57F17'), fontWeight: 700
                   }}>
-                    {order.payment_status === 'PAID' ? 'Paid ✓' : 'Payment Pending'}
+                    {(order.payment_status === 'PAID' || ['Preparing', 'Ready for Pickup', 'Picked Up'].includes(order.status)) ? 'Paid ✓' : (order.status === 'Cancelled' ? 'Cancelled' : 'Payment Pending')}
                   </span>
                 </div>
               </div>
@@ -133,19 +155,67 @@ export default function OrdersPage({ navigate, showToast }) {
 
               {/* Bill breakdown */}
               <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-light)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  <span>Item total</span>
-                  <span>₹{order.total}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                  <span>Platform fee</span>
-                  <span>₹{PLATFORM_FEE}</span>
-                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)' }}>Total Amount</span>
-                  <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>₹{displayTotal}</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)' }}>Total Paid</span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>₹{order.total_price}</span>
                 </div>
               </div>
+
+              {order.payment_status === 'PENDING' && order.status === 'Placed' && (
+                <div style={{ marginTop: '16px', background: '#FFF3E0', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid #FFCC80' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⚠️</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: '#E65100', fontWeight: 600, lineHeight: 1.4 }}>
+                        Please pay ₹{order.total_price} to {order.outlet_upi_id || 'sharukhansharukhan926@oksbi'} to confirm your order.
+                      </p>
+                      
+                      {isMobile ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              window.location.href = generateUpiLink(order);
+                              if (showToast) showToast('Once paid, please wait for the vendor to verify your transaction.', 'info');
+                            }}
+                            style={{
+                              width: '100%', background: '#1A73E8', color: 'white', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px'
+                            }}
+                          >
+                            <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11c-.5 2.5-1.9 4.7-3.9 6.1v5h6.3c3.7-3.4 5.8-8.4 6.2-14.8z" fill="#4285F4"/>
+                              <path d="M24 44c5.4 0 9.9-1.8 13.2-4.8l-6.3-5c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H6.1v5.2C9.4 39.9 16.2 44 24 44z" fill="#34A853"/>
+                              <path d="M12.6 27.7c-.4-1.2-.7-2.4-.7-3.7s.2-2.5.7-3.7v-5.2H6.1C4.8 17.5 4 20.7 4 24s.8 6.5 2.1 8.9l6.5-5.2z" fill="#FBBC05"/>
+                              <path d="M24 12c3 0 5.7 1 7.8 3l5.8-5.8C34 6 29.4 4 24 4 16.2 4 9.4 8.1 6.1 15.1l6.5 5.2C14.2 15.6 18.7 12 24 12z" fill="#EA4335"/>
+                            </svg>
+                            Pay Now via UPI
+                          </button>
+                          <p style={{ margin: 0, fontSize: '0.75rem', color: '#E65100', opacity: 0.9 }}>
+                            *Once paid, please wait for the vendor to verify your transaction.
+                          </p>
+                        </>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <code style={{ background: '#FFE0B2', padding: '6px 10px', borderRadius: '6px', fontSize: '0.85rem', color: '#E65100', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
+                            {order.outlet_upi_id || 'sharukhansharukhan926@oksbi'}
+                          </code>
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(order.outlet_upi_id || 'sharukhansharukhan926@oksbi');
+                              setCopiedId(order.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            style={{
+                              background: '#E65100', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s'
+                            }}
+                          >
+                            {copiedId === order.id ? 'Copied ✓' : 'Copy'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {canCancel && (
                 <button

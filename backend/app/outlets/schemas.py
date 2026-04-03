@@ -12,7 +12,6 @@ class OutletCreate(BaseModel):
     opening_time: str = "08:00"
     closing_time: str = "20:00"
     slot_duration_minutes: int = 15
-    max_orders_per_slot: int = 15
     image_url: Optional[str] = None
 
 class OutletUpdate(BaseModel):
@@ -23,7 +22,6 @@ class OutletUpdate(BaseModel):
     opening_time: Optional[str] = None
     closing_time: Optional[str] = None
     slot_duration_minutes: Optional[int] = None
-    max_orders_per_slot: Optional[int] = None
     image_url: Optional[str] = None
     is_open: Optional[bool] = None
 
@@ -39,7 +37,6 @@ class OutletResponse(BaseModel):
     opening_time: str
     closing_time: str
     slot_duration_minutes: int
-    max_orders_per_slot: int
     image_url: Optional[str]
     created_at: datetime
 

@@ -56,7 +56,8 @@ export default function CartPage({ navigate, showToast }) {
     if (isSubmittingRef.current) return;
     setLoading(true);
     try {
-      await placeOrder(selectedSlot);
+      const totalWithFee = cartTotal + PLATFORM_FEE;
+      await placeOrder(selectedSlot, totalWithFee);
       setShowOrderConfirmation(true);
     } catch (err) {
       showToast(err?.response?.data?.detail || 'Failed to place order', 'error');
@@ -69,7 +70,7 @@ export default function CartPage({ navigate, showToast }) {
   if (showOrderConfirmation && lastPlacedOrder) {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
     // Use displayTotal (items + platform fee) set in AppContext
-    const displayTotal = lastPlacedOrder.displayTotal || (lastPlacedOrder.total + PLATFORM_FEE);
+    const displayTotal = lastPlacedOrder.displayTotal || lastPlacedOrder.total_price;
     // GPay deep link
     const gpayLink = `upi://pay?pa=${PLATFORM_UPI_ID}&pn=${encodeURIComponent('QuickBite')}&am=${displayTotal}&cu=INR&tn=QuickBite%20${lastPlacedOrder.id}%20Token%23${lastPlacedOrder.token_number}`;
 
@@ -94,9 +95,7 @@ export default function CartPage({ navigate, showToast }) {
             <div className="qb-confirm-row"><span>Reg No.</span><strong>{user?.register_number || '—'}</strong></div>
             <div className="qb-confirm-row"><span>Outlet</span><strong>{lastPlacedOrder.outletName || 'Campus Outlet'}</strong></div>
             <div className="qb-confirm-row"><span>Pickup</span><strong>{lastPlacedOrder.pickup_time || lastPlacedOrder.pickupTime}</strong></div>
-            <div className="qb-confirm-row"><span>Item Total</span><strong>₹{lastPlacedOrder.total}</strong></div>
-            <div className="qb-confirm-row"><span>Platform Fee</span><strong>₹{PLATFORM_FEE}</strong></div>
-            <div className="qb-confirm-row total-row"><span>Total</span><strong>₹{displayTotal}</strong></div>
+            <div className="qb-confirm-row total-row"><span>Total Paid</span><strong>₹{displayTotal}</strong></div>
           </div>
 
           {/* Payment */}
@@ -164,6 +163,18 @@ export default function CartPage({ navigate, showToast }) {
 
   const canOrder = selectedSlot && !outletClosed;
 
+  const istTimeString = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
+  const [istHours, istMinutes] = istTimeString.split(':').map(Number);
+  const currentMinutes = istHours * 60 + istMinutes;
+
+  const parseTimeToMinutes = (timeStr) => {
+    const [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+    if (hours === 12) hours = modifier === 'PM' ? 12 : 0;
+    else if (modifier === 'PM') hours += 12;
+    return hours * 60 + minutes;
+  };
+
   /* ─── MAIN CART ─── */
   return (
     <div className="qb-cart-page">
@@ -220,18 +231,24 @@ export default function CartPage({ navigate, showToast }) {
             {[1,2,3,4,5,6].map(i => <div key={i} className="qb-slot-skel skeleton" />)}
           </div>
         ) : slots.length === 0 ? (
-          <p className="qb-no-slots">No pickup slots available. Ordering is open 11:00 AM – 2:30 PM only.</p>
+          <p className="qb-no-slots">Ordering is Closed. Available only between 11:00 AM – 3:00 PM.</p>
         ) : (
           <div className="qb-slots-grid">
-            {slots.map(slot => (
-              <button
-                key={slot.time}
-                className={`qb-slot-btn ${selectedSlot === slot.time ? 'selected' : ''}`}
-                onClick={() => setSelectedSlot(slot.time)}
-              >
-                <span className="qb-slot-time">{slot.time}</span>
-              </button>
-            ))}
+            {slots.map(slot => {
+              const slotMinutes = parseTimeToMinutes(slot.time);
+              const isPast = slotMinutes < currentMinutes;
+
+              return (
+                <button
+                  key={slot.time}
+                  className={`qb-slot-btn ${selectedSlot === slot.time ? 'selected' : ''} ${isPast ? 'disabled' : ''}`}
+                  onClick={() => { if (!isPast) setSelectedSlot(slot.time); }}
+                  disabled={isPast}
+                >
+                  <span className="qb-slot-time">{slot.time}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -383,6 +400,8 @@ const cartStyles = `
 }
 .qb-slot-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-bg); }
 .qb-slot-btn.selected { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); }
+.qb-slot-btn.disabled { opacity: 0.4; cursor: not-allowed; background: var(--bg); border-color: var(--border-light); color: var(--text-muted); }
+.qb-slot-btn.disabled:hover { background: var(--bg); border-color: var(--border-light); color: var(--text-muted); }
 .qb-slot-time { font-size: 0.75rem; font-weight: 600; }
 .qb-no-slots { font-size: 0.85rem; color: var(--text-muted); }
 .qb-slots-skeleton { display: flex; gap: 8px; flex-wrap: wrap; }

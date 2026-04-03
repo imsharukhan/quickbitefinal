@@ -19,5 +19,4 @@ class Outlet(Base):
     opening_time: Mapped[str] = mapped_column(String(5), default="08:00")
     closing_time: Mapped[str] = mapped_column(String(5), default="20:00")
     slot_duration_minutes: Mapped[int] = mapped_column(Integer, default=15)
-    max_orders_per_slot: Mapped[int] = mapped_column(Integer, default=15)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

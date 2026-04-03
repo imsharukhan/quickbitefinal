@@ -33,25 +33,6 @@ async def get_daily_token(db: AsyncSession, outlet_id: str) -> int:
     count = result.scalar()
     return count + 1
 
-async def validate_slot_capacity(db: AsyncSession, outlet_id: str, pickup_time: str) -> bool:
-    outlet = await db.execute(select(Outlet).where(Outlet.id == outlet_id))
-    outlet_obj = outlet.scalars().first()
-    if not outlet_obj:
-        return False
-    today_ist = datetime.now(IST).date()
-    start_of_day = IST.localize(datetime(today_ist.year, today_ist.month, today_ist.day))
-    start_of_day_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
-    result = await db.execute(
-        select(func.count(Order.id)).where(
-            Order.outlet_id == outlet_id,
-            Order.pickup_time == pickup_time,
-            Order.placed_at >= start_of_day_utc,
-            Order.status != "Cancelled"
-        )
-    )
-    count = result.scalar()
-    return count < outlet_obj.max_orders_per_slot
-
 def generate_idempotency_key(user_id: str, outlet_id: str, pickup_time: str, items: list) -> str:
     sorted_items = sorted(items, key=lambda x: x.menu_item_id)
     data = f"{user_id}{outlet_id}{pickup_time}{json.dumps([i.model_dump() for i in sorted_items])}"
@@ -60,7 +41,7 @@ def generate_idempotency_key(user_id: str, outlet_id: str, pickup_time: str, ite
 def get_upi_deep_link(outlet: Outlet, order: Order) -> str:
     if not outlet.upi_id:
         return ""
-    return f"upi://pay?pa={outlet.upi_id}&pn={outlet.name}&am={order.total}&cu=INR&tn=QuickBite {order.id} Token%23{order.token_number}"
+    return f"upi://pay?pa={outlet.upi_id}&pn={outlet.name}&am={order.total_price}&cu=INR&tn=QuickBite {order.id} Token%23{order.token_number}"
 
 async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     key = generate_idempotency_key(user_id, data.outlet_id, data.pickup_time, data.items)
@@ -78,7 +59,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     if not outlet or not outlet.is_open:
         raise HTTPException(status_code=400, detail="Outlet is currently closed")
 
-    total_price = 0.0
+    total_price = data.total_price
     order_items_to_create = []
 
     for item_input in data.items:
@@ -91,8 +72,6 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         if not menu_item.is_available:
             raise HTTPException(status_code=400, detail=f"{menu_item.name} is currently unavailable")
             
-        total_price += (menu_item.price * item_input.quantity)
-        
         order_items_to_create.append(OrderItem(
             menu_item_id=menu_item.id,
             name=menu_item.name,
@@ -101,9 +80,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
             is_veg=menu_item.is_veg
         ))
 
-    has_capacity = await validate_slot_capacity(db, data.outlet_id, data.pickup_time)
-    if not has_capacity:
-        raise HTTPException(status_code=400, detail="This time slot is full, please choose another")
+
 
     token_number = await get_daily_token(db, data.outlet_id)
 
@@ -118,7 +95,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         payment_status="PENDING",
         payment_confirmed_by_vendor=False,
         payment_gateway_id=None,
-        total=total_price,
+        total_price=total_price,
         pickup_time=data.pickup_time,
         token_number=token_number,
         payment_method="upi",
@@ -171,7 +148,7 @@ async def format_order_response(db: AsyncSession, order: Order) -> dict:
         "payment_status": order.payment_status,
         "payment_confirmed_by_vendor": order.payment_confirmed_by_vendor,
         "payment_gateway_id": order.payment_gateway_id,
-        "total": order.total,
+        "total_price": order.total_price,
         "pickup_time": order.pickup_time,
         "token_number": order.token_number,
         "payment_method": order.payment_method,
@@ -388,11 +365,18 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     completed_today = res.scalar() or 0
     
     # 5. Revenue Today
-    res = await db.execute(select(func.sum(Order.total)).where(Order.outlet_id == outlet_id, Order.status != "Cancelled", Order.placed_at >= start_of_day_utc))
+    res = await db.execute(select(func.sum(Order.total_price)).where(
+        Order.outlet_id == outlet_id,
+        Order.status.in_(["Preparing", "Ready for Pickup", "Picked Up"]),
+        Order.placed_at >= start_of_day_utc
+    ))
     revenue_today = res.scalar() or 0.0
     
     # 6. Total Revenue
-    res = await db.execute(select(func.sum(Order.total)).where(Order.outlet_id == outlet_id, Order.status != "Cancelled"))
+    res = await db.execute(select(func.sum(Order.total_price)).where(
+        Order.outlet_id == outlet_id,
+        Order.status.in_(["Preparing", "Ready for Pickup", "Picked Up"])
+    ))
     total_revenue = res.scalar() or 0.0
     
     # 7. Pending Payment Count

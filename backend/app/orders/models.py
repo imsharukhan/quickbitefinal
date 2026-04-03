@@ -11,7 +11,7 @@ class Order(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     outlet_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("outlets.id"))
     status: Mapped[str] = mapped_column(String(50), default="Placed")
-    total: Mapped[float] = mapped_column(Float)
+    total_price: Mapped[float] = mapped_column(Float, default=0.0)
     pickup_time: Mapped[str] = mapped_column(String(20))
     token_number: Mapped[int] = mapped_column(Integer)
     payment_method: Mapped[str] = mapped_column(String(50), default="upi")

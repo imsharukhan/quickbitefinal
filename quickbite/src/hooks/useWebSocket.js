@@ -15,6 +15,14 @@ export function useWebSocket(role, id) {
             if (attemptRef.current > 5) return;
             
             const token = localStorage.getItem('qb_token');
+            const storedRole = localStorage.getItem('qb_role');
+            const normalizedStored = storedRole === 'staff' ? 'student' : storedRole;
+            
+            // SECURITY: Prevent cross-role token network storms
+            if (role !== normalizedStored) {
+                return;
+            }
+
             const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws');
             const wsUrl = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/api/orders/ws/${role}/${id}?token=${token}`;
             
@@ -63,9 +71,14 @@ export function useWebSocket(role, id) {
         connect();
 
         return () => {
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            if (wsRef.current) {
+                wsRef.current.onopen = null;
                 wsRef.current.onclose = null;
-                wsRef.current.close();
+                wsRef.current.onmessage = null;
+                wsRef.current.onerror = null;
+                if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+                    wsRef.current.close();
+                }
             }
         };
     }, [role, id]);

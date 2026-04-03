@@ -6,31 +6,32 @@ export default function BudgetPage({ navigate }) {
     const { orders } = useApp();
 
     const completedOrders = orders.filter(
-        o => o.status !== ORDER_STATUS.CANCELLED
+        o => o.status !== ORDER_STATUS.CANCELLED && 
+             (o.payment_status === 'PAID' || ['Preparing', 'Ready for Pickup', 'Picked Up'].includes(o.status))
     );
 
     const totalSpent = completedOrders.reduce(
-        (sum, o) => sum + o.total, 0
+        (sum, o) => sum + (o.total_price || 0), 0
     );
 
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const weekOrders = completedOrders.filter(
-        o => new Date(o.placedAt) >= oneWeekAgo
+        o => new Date((o.placed_at || "").endsWith('Z') ? o.placed_at : o.placed_at + 'Z') >= oneWeekAgo
     );
-    const weekSpent = weekOrders.reduce((sum, o) => sum + o.total, 0);
+    const weekSpent = weekOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
 
     const today = new Date().toDateString();
-    const todayOrders = completedOrders.filter(
-        o => new Date(o.placedAt).toDateString() === today
+    const todayOrders = completedOrders.filter(o => 
+        new Date((o.placed_at || "").endsWith('Z') ? o.placed_at : o.placed_at + 'Z').toDateString() === today
     );
-    const todaySpent = todayOrders.reduce((sum, o) => sum + o.total, 0);
+    const todaySpent = todayOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
 
     const allItems = completedOrders.flatMap(o => o.items);
     const vegSpent = allItems
-        .filter(i => i.veg)
+        .filter(i => i.is_veg)
         .reduce((sum, i) => sum + i.price * i.quantity, 0);
     const nonVegSpent = allItems
-        .filter(i => !i.veg)
+        .filter(i => !i.is_veg)
         .reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     const itemCount = {};
@@ -43,8 +44,9 @@ export default function BudgetPage({ navigate }) {
 
     const canteenSpend = {};
     completedOrders.forEach(o => {
-        canteenSpend[o.outletName] =
-            (canteenSpend[o.outletName] || 0) + o.total;
+        const outletName = o.outlet_name || o.outletName || 'Unknown Canteen';
+        canteenSpend[outletName] =
+            (canteenSpend[outletName] || 0) + (o.total_price || 0);
     });
 
     const avgOrder = completedOrders.length > 0

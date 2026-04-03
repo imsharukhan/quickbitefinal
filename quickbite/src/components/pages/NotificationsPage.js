@@ -1,6 +1,22 @@
 'use client';
 import { useApp } from '@/context/AppContext';
 
+function formatRelativeTime(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+  
+  if (diffInSeconds < 60) return 'Just now';
+  
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' });
+  
+  if (diffInSeconds < 3600) return rtf.format(-Math.floor(diffInSeconds / 60), 'minute');
+  if (diffInSeconds < 86400) return rtf.format(-Math.floor(diffInSeconds / 3600), 'hour');
+  if (diffInSeconds < 2592000) return rtf.format(-Math.floor(diffInSeconds / 86400), 'day');
+  return date.toLocaleDateString();
+}
+
 export default function NotificationsPage({ navigate }) {
   const { notifications, markNotificationRead, markAllNotificationsRead, isNotifsLoading } = useApp();
 
@@ -50,7 +66,7 @@ export default function NotificationsPage({ navigate }) {
               </div>
               <div className="notif-content">
                 <p>{notif.message} {notif.related_order_id && <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold' }}> → View Order</span>}</p>
-                <span className="notif-time">{new Date(notif.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <span className="notif-time">{formatRelativeTime(notif.created_at)}</span>
               </div>
               {!notif.is_read && <div className="unread-dot"></div>}
             </div>

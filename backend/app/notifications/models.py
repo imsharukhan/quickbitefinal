@@ -1,8 +1,12 @@
 import uuid
+import pytz
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
+
+def get_ist_now():
+    return datetime.now(pytz.timezone('Asia/Kolkata')).replace(tzinfo=None)
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -12,4 +16,4 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(String(500))
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     related_order_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=get_ist_now)

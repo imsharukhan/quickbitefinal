@@ -11,6 +11,7 @@ class OrderCreate(BaseModel):
     outlet_id: str
     items: List[OrderItemInput] = Field(..., min_length=1)
     pickup_time: str
+    total_price: float
 
 class OrderItemResponse(BaseModel):
     name: str
@@ -30,7 +31,7 @@ class OrderResponse(BaseModel):
     payment_status: str
     payment_confirmed_by_vendor: bool
     payment_gateway_id: Optional[str]
-    total: float
+    total_price: float
     pickup_time: str
     token_number: int
     payment_method: str

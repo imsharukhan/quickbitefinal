@@ -29,7 +29,7 @@ export default function RegisterPage({ navigate }) {
   }, [step, timer]);
 
   const isValidRegNo = /^[0-9]{8,16}$/.test(regNo);
-  const isValidEmail = email.trim() === '' || (email.includes('@') && email.includes('.'));
+  const isValidEmail = email && email.includes('@') && email.includes('.');
   const passwordsMatch = password === confirmPassword && password.length >= 6;
   const isFormValid = name && isValidRegNo && isValidEmail && passwordsMatch;
 
@@ -41,7 +41,7 @@ export default function RegisterPage({ navigate }) {
     setError('');
     
     try {
-      const res = await registerUser(name, regNo, email || null, password);
+      const res = await registerUser(name, regNo, email, password);
       if (res.requires_otp) {
         setStep(2);
         setTimer(60);
@@ -173,12 +173,10 @@ export default function RegisterPage({ navigate }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Email (Optional)</label>
-                <input type="email" className={`form-input ${(email && !isValidEmail) ? 'error' : ''}`} placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} disabled={loading} />
-                {email && !isValidEmail ? (
+                <label className="form-label">Email *</label>
+                <input type="email" className={`form-input ${(email && !isValidEmail) ? 'error' : ''}`} placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} required disabled={loading} />
+                {email && !isValidEmail && (
                   <div className="field-hint" style={{color: 'var(--red)'}}>Please enter a valid email address</div>
-                ) : (
-                  <div className="field-hint">Optional: Add an email to enable online recovery.</div>
                 )}
               </div>
 

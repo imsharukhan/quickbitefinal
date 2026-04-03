@@ -46,7 +46,7 @@ export default function VendorDashboard({ showToast }) {
  
     const [showAddItem, setShowAddItem] = useState(false);
     const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
-    const [outletForm, setOutletForm] = useState({ upi_id: '', opening_time: '', closing_time: '', max_orders_per_slot: 10 });
+    const [outletForm, setOutletForm] = useState({ upi_id: '', opening_time: '', closing_time: '' });
  
     const { lastMessage } = useWebSocket('vendor', user?.id);
  
@@ -76,7 +76,6 @@ export default function VendorDashboard({ showToast }) {
                 upi_id: selectedOutlet.upi_id || '',
                 opening_time: selectedOutlet.opening_time || '08:00',
                 closing_time: selectedOutlet.closing_time || '20:00',
-                max_orders_per_slot: selectedOutlet.max_orders_per_slot || 10,
             });
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
@@ -105,13 +104,31 @@ export default function VendorDashboard({ showToast }) {
         );
     }
  
+    // Confetti logic seamlessly replaced with a clean UI toast below!
+
     const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         setActionLoading(orderId);
         try {
-            if (currentStatus === 'Placed') await orderSvc.confirmPayment(orderId);
-            else await orderSvc.updateOrderStatus(orderId, newStatus);
-            await loadOutletData();
-            showToast('Order updated ✅');
+            if (currentStatus === 'Placed') {
+                const updatedOrder = await orderSvc.confirmPayment(orderId);
+                setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+                setFilterStatus('Preparing');
+                
+                // Fetch stats Live
+                orderSvc.getOutletStats(selectedOutlet.id).then(sData => {
+                    if (sData) {
+                        setStats(sData);
+                    }
+                }).catch(() => {});
+                showToast('Payment Confirmed!', 'success');
+            } else {
+                const updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
+                setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+                showToast('Order updated ✅');
+            }
+            
+            // Background sync
+            loadOutletData();
         } catch (e) { showToast('Failed to update order', 'error'); }
         finally { setActionLoading(null); }
     };
@@ -300,7 +317,8 @@ export default function VendorDashboard({ showToast }) {
                             {filteredOrders.map(order => {
                                 const action = !['Cancelled', 'Picked Up'].includes(order.status) ? getNextAction(order.status) : null;
                                 const isLoading = actionLoading === order.id;
-                                const minsWaiting = order.status === 'Placed' ? Math.floor((new Date() - new Date(order.placed_at)) / 60000) : 0;
+                                const placedAtUTC = order.placed_at ? (order.placed_at.endsWith('Z') ? order.placed_at : order.placed_at + 'Z') : new Date().toISOString();
+                                const minsWaiting = order.status === 'Placed' ? Math.max(0, Math.floor((new Date() - new Date(placedAtUTC)) / 60000)) : 0;
                                 const isGhost = minsWaiting > 20;
                                 return (
                                     <div key={order.id} style={{
@@ -325,11 +343,19 @@ export default function VendorDashboard({ showToast }) {
                                                 color: order.status === 'Placed' ? 'var(--blue)' : order.status === 'Preparing' ? 'var(--yellow)' : order.status === 'Ready for Pickup' ? 'var(--green)' : 'var(--text-muted)',
                                             }}>{order.status}</div>
                                         </div>
-                                        <div style={{ padding: '8px 16px', background: order.payment_status === 'PENDING' ? 'var(--yellow-bg)' : 'var(--green-bg)' }}>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: order.payment_status === 'PENDING' ? 'var(--yellow)' : 'var(--green)' }}>
-                                                {order.payment_status === 'PENDING' ? '⏳ Payment Pending' : '✅ Payment Confirmed'}
-                                            </span>
-                                        </div>
+                                        {order.status === 'Cancelled' ? (
+                                            <div style={{ padding: '8px 16px', background: 'var(--red-bg)' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--red)' }}>
+                                                    ❌ Cancelled
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div style={{ padding: '8px 16px', background: (order.payment_status === 'PENDING' && order.status === 'Placed') ? 'var(--yellow-bg)' : 'var(--green-bg)' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: (order.payment_status === 'PENDING' && order.status === 'Placed') ? 'var(--yellow)' : 'var(--green)' }}>
+                                                    {(order.payment_status === 'PENDING' && order.status === 'Placed') ? '⏳ Payment Pending' : '✅ Payment Confirmed'}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light)' }}>
                                             {order.items?.map((item, idx) => (
                                                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
@@ -339,7 +365,7 @@ export default function VendorDashboard({ showToast }) {
                                             ))}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--border)' }}>
                                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{order.items?.length} item(s)</span>
-                                                <span style={{ fontWeight: 800, fontSize: '1rem' }}>₹{order.total}</span>
+                                                <span style={{ fontWeight: 800, fontSize: '1rem' }}>₹{order.total_price}</span>
                                             </div>
                                         </div>
                                         {isGhost && (
@@ -577,12 +603,7 @@ export default function VendorDashboard({ showToast }) {
                                     style={{ width: '100%', padding: '10px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.875rem', boxSizing: 'border-box', outline: 'none' }} />
                             </div>
                         </div>
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Max Orders Per Slot</label>
-                            <input type="number" min="1" max="50" value={outletForm.max_orders_per_slot}
-                                onChange={e => setOutletForm({ ...outletForm, max_orders_per_slot: parseInt(e.target.value) })}
-                                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.875rem', boxSizing: 'border-box', outline: 'none' }} />
-                        </div>
+
                         <button onClick={handleSaveOutlet}
                             style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
                             Save Settings
@@ -609,7 +630,7 @@ export default function VendorDashboard({ showToast }) {
                                 { label: 'Outlet Status', value: selectedOutlet?.is_open ? 'Open 🟢' : 'Closed 🔴', icon: '📍' },
                                 { label: 'Hours', value: selectedOutlet ? `${selectedOutlet.opening_time} – ${selectedOutlet.closing_time}` : '—', icon: '🕐' },
                                 { label: 'Rating', value: selectedOutlet?.rating ? `⭐ ${selectedOutlet.rating}` : 'No ratings yet', icon: '⭐' },
-                                { label: 'Menu Items', value: `${availableItems} available / ${totalMenuItems} total`, icon: '📋' },
+                                { label: 'Menu Items', value: 'Unlimited', icon: '📋' },
                             ].map((row, i) => (
                                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: i < 6 ? '1px solid var(--border-light)' : 'none' }}>
                                     <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>{row.icon}</div>

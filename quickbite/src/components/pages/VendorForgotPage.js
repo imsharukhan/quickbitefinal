@@ -2,14 +2,13 @@
 import { useState, useRef, useEffect } from 'react';
 import * as authService from '../../services/authService';
 
-export default function ForgotPasswordPage({ navigate }) {
+export default function VendorForgotPage({ navigate }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const [email, setEmail] = useState('');
-  const [regNo, setRegNo] = useState('');
+  const [phone, setPhone] = useState('');
   
   const [otp, setOtp] = useState(['','','','','','']);
   const otpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
@@ -26,24 +25,23 @@ export default function ForgotPasswordPage({ navigate }) {
     return () => clearInterval(interval);
   }, [step, timer]);
 
-  const isValidEmail = email.includes('@');
-  const isValidRegNo = /^[0-9]{8,16}$/.test(regNo);
+  const isValidPhone = /^[0-9]{10}$/.test(phone);
   
   const handleSendOTP = async (e) => {
     e.preventDefault();
-    if (!isValidEmail || !isValidRegNo) return;
+    if (!isValidPhone) return;
     setLoading(true);
     setError('');
     try {
-      await authService.forgotPassword(email);
-      setSuccess('OTP sent successfully if email matched.');
+      await authService.vendorForgotPassword(phone);
+      setSuccess('OTP sent successfully if phone registered.');
       setTimeout(() => {
           setSuccess('');
           setStep(2);
           setTimer(60);
       }, 1500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to send OTP');
+      setError('Failed to request OTP');
     } finally {
       setLoading(false);
     }
@@ -61,11 +59,11 @@ export default function ForgotPasswordPage({ navigate }) {
     setLoading(true);
     setError('');
     try {
-      await authService.resetPassword(regNo, otp.join(''), newPassword);
+      await authService.vendorResetPassword(phone, otp.join(''), newPassword);
       setSuccess('Password reset successfully!');
       setTimeout(() => navigate('login'), 2000);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to reset password. OTP may be expired.');
+      setError('Failed to reset password. OTP may be expired.');
     } finally {
       setLoading(false);
     }
@@ -74,10 +72,10 @@ export default function ForgotPasswordPage({ navigate }) {
   const handleResend = async () => {
     setError('');
     try {
-      await authService.forgotPassword(email);
+      await authService.vendorForgotPassword(phone);
       setTimer(60);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to resend');
+      setError('Failed to resend');
     }
   };
 
@@ -126,20 +124,16 @@ export default function ForgotPasswordPage({ navigate }) {
 
         {step === 1 && (
           <>
-            <h2 className="auth-title">Forgot Password?</h2>
-            <p className="auth-subtitle">We'll send you an OTP to reset it</p>
+            <h2 className="auth-title">Vendor Recovery</h2>
+            <p className="auth-subtitle">We'll send an OTP to your phone</p>
             {error && <div className="error-box">{error}</div>}
             {success && <div className="success-box">{success}</div>}
             <form onSubmit={handleSendOTP}>
               <div className="form-group">
-                <label className="form-label">Register Number</label>
-                <input type="text" className="form-input" value={regNo} onChange={e => setRegNo(e.target.value.replace(/\D/g, ''))} required disabled={loading} placeholder="Enter register number" />
+                <label className="form-label">Registered Mobile Number</label>
+                <input type="tel" className="form-input" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} required disabled={loading} placeholder="e.g. 9876543210" />
               </div>
-              <div className="form-group">
-                <label className="form-label">Registered Email</label>
-                <input type="email" className={`form-input ${(email && !isValidEmail) ? 'error' : ''}`} value={email} onChange={e => setEmail(e.target.value)} required disabled={loading} placeholder="your.email@example.com" />
-              </div>
-              <button type="submit" className="btn btn-primary btn-block" disabled={!isValidEmail || !isValidRegNo || loading} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={!isValidPhone || loading} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                 {loading ? <div className="spinner"></div> : 'Send OTP'}
               </button>
             </form>
@@ -149,7 +143,7 @@ export default function ForgotPasswordPage({ navigate }) {
         {step === 2 && (
           <>
             <h2 className="auth-title">Verify OTP</h2>
-            <p className="auth-subtitle">Enter the 6-digit code sent to your email</p>
+            <p className="auth-subtitle">Enter the 6-digit code sent</p>
             {error && <div className="error-box">{error}</div>}
             <form onSubmit={handleVerifyOTP}>
               <div className="otp-inputs" onPaste={handleOtpPaste}>

@@ -10,12 +10,6 @@ export default function ProfilePage({ navigate }) {
     await logout();
   };
 
-  const totalSpent = orders
-    ?.filter(o => o.status === 'Picked Up')
-    .reduce((sum, o) => sum + (o.total || 0), 0) || 0;
-
-  const totalOrders = orders?.filter(o => o.status === 'Picked Up').length || 0;
-
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U';
@@ -78,24 +72,6 @@ export default function ProfilePage({ navigate }) {
               #{user.register_number}
             </span>
           )}
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-        <div style={{
-          background: 'var(--bg-white)', border: '1px solid var(--border-light)',
-          borderRadius: 'var(--radius)', padding: '16px', textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--primary)' }}>{totalOrders}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Orders Completed</div>
-        </div>
-        <div style={{
-          background: 'var(--bg-white)', border: '1px solid var(--border-light)',
-          borderRadius: 'var(--radius)', padding: '16px', textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--green)' }}>₹{totalSpent.toFixed(0)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Total Spent</div>
         </div>
       </div>
 

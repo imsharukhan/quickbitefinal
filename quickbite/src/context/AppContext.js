@@ -31,7 +31,7 @@ export function AppProvider({ children }) {
 
     useEffect(() => { localStorage.setItem('qb_cart', JSON.stringify(cart)); }, [cart]);
 
-    const loadOrders = async () => {
+    const loadOrders = useCallback(async () => {
         setIsOrdersLoading(true);
         try {
             const data = await orderService.getMyOrders();
@@ -41,9 +41,9 @@ export function AppProvider({ children }) {
         } finally {
             setIsOrdersLoading(false);
         }
-    };
+    }, []);
 
-    const loadNotifications = async () => {
+    const loadNotifications = useCallback(async () => {
         setIsNotifsLoading(true);
         try {
             const data = await notificationService.getNotifications();
@@ -53,7 +53,7 @@ export function AppProvider({ children }) {
         } finally {
             setIsNotifsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         if (isLoggedIn) {
@@ -106,7 +106,7 @@ export function AppProvider({ children }) {
     // Total including platform fee — used for payment
     const grandTotal = cartTotal + PLATFORM_FEE;
 
-    const placeOrder = async (pickup_time) => {
+    const placeOrder = async (pickup_time, total_price) => {
         if (isSubmittingRef.current) return;
         if (cart.length === 0) return;
         
@@ -115,15 +115,15 @@ export function AppProvider({ children }) {
             const outlet_id = cart[0].outletId;
             const items = cart.map(i => ({ menu_item_id: i.id, quantity: i.quantity }));
             
-            const response = await orderService.placeOrder(outlet_id, items, pickup_time);
+            // Send total_price explicitly to backend
+            const response = await orderService.placeOrder(outlet_id, items, pickup_time, total_price);
 
             // Build UPI deep link with platform UPI ID and grand total (items + platform fee)
-            const totalWithFee = (response.total || cartTotal) + PLATFORM_FEE;
-            const deepLink = `upi://pay?pa=${PLATFORM_UPI_ID}&pn=${encodeURIComponent(PLATFORM_UPI_NAME)}&am=${totalWithFee}&cu=INR&tn=QuickBite%20${response.id}%20Token%23${response.token_number}`;
+            const deepLink = `upi://pay?pa=${PLATFORM_UPI_ID}&pn=${encodeURIComponent(PLATFORM_UPI_NAME)}&am=${total_price}&cu=INR&tn=QuickBite%20${response.id}%20Token%23${response.token_number}`;
             
             setUpiDeepLink(deepLink);
             // Store grandTotal on the order object for display
-            setLastPlacedOrder({ ...response, displayTotal: totalWithFee });
+            setLastPlacedOrder({ ...response, displayTotal: total_price });
             clearCart();
             await loadOrders();
             return response;

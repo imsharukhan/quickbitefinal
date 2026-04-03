@@ -27,7 +27,11 @@ export default function LoginPage({ navigate }) {
         await loginVendor(phone, password);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Login failed');
+      if (err.response && (err.response.status === 401 || err.response.status === 400 || err.response.status === 403 || err.response.status === 422)) {
+        setError('Incorrect register number or password.');
+      } else {
+        setError('Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -95,8 +99,12 @@ export default function LoginPage({ navigate }) {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <label className="form-label">Password</label>
-              {tab === 'student' && (
+              {tab === 'student' ? (
                 <button type="button" className="auth-link" onClick={() => navigate('forgot')} style={{ fontSize: '0.8rem' }}>
+                  Forgot Password?
+                </button>
+              ) : (
+                <button type="button" className="auth-link" onClick={() => navigate('vendor-forgot')} style={{ fontSize: '0.8rem' }}>
                   Forgot Password?
                 </button>
               )}
