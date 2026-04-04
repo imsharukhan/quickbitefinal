@@ -72,7 +72,7 @@ async def resend_otp(data: schemas.ResendOTP, background_tasks: BackgroundTasks,
     otp = utils.generate_otp()
     redis_client.set(f"otp:{data.register_number}", otp, ex=600)
     increment_otp_count(data.register_number)
-    background_tasks.add_task(service.send_otp_email, user.email, user.name, otp, "verify")
+    background_tasks.add_task(service.send_otp_email, user.email, user.student_profile.name if user.student_profile else "User", otp, "verify")
     return {"message": "OTP resent successfully"}
 
 @router.post("/forgot-password")
@@ -84,8 +84,8 @@ async def forgot_password(data: schemas.ForgotPassword, background_tasks: Backgr
             check_otp_rate_limit(user.register_number)
             otp = utils.generate_otp()
             redis_client.set(f"reset:{user.register_number}", otp, ex=600)
-            increment_otp_count(user.register_number)
-            background_tasks.add_task(service.send_otp_email, user.email, user.name, otp, "reset")
+            increment_otp_count(user.student_profile.register_no if user.student_profile else user.id)
+            background_tasks.add_task(service.send_otp_email, user.email, user.student_profile.name if user.student_profile else "User", otp, "reset")
         except HTTPException:
             pass
     return {"message": msg}
@@ -126,7 +126,7 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
         "refresh_token": refresh_token,
         "role": user.role,
         "user_id": str(user.id),
-        "name": user.name,
+        "name": user.student_profile.name if user.student_profile else "",
         "must_change_password": False
     }
 
@@ -136,11 +136,11 @@ async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get
     if not vendor:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect roll number or password.")
         
-    if not vendor.is_active:
+    if not vendor.user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
         
-    access_token = utils.create_access_token({"sub": str(vendor.id), "role": "vendor"})
-    refresh_token = utils.create_refresh_token({"sub": str(vendor.id), "role": "vendor"})
+    access_token = utils.create_access_token({"sub": str(vendor.user.id), "role": "vendor"})
+    refresh_token = utils.create_refresh_token({"sub": str(vendor.user.id), "role": "vendor"})
     
     redis_client.set(f"refresh:{vendor.id}", refresh_token, ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     
@@ -148,17 +148,17 @@ async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get
         "access_token": access_token,
         "refresh_token": refresh_token,
         "role": "vendor",
-        "user_id": str(vendor.id),
-        "name": vendor.name,
+        "user_id": str(vendor.user.id),
+        "name": vendor.business_name,
         "must_change_password": vendor.must_change_password
     }
 
 @router.post("/vendor/change-password")
 async def vendor_change_password(data: schemas.VendorChangePassword, current_vendor = Depends(get_current_vendor), db: AsyncSession = Depends(get_db)):
-    if not utils.verify_password(data.old_password, current_vendor.password_hash):
+    if not utils.verify_password(data.old_password, current_vendor.user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid old password")
         
-    current_vendor.password_hash = utils.hash_password(data.new_password)
+    current_vendor.user.hashed_password = utils.hash_password(data.new_password)
     current_vendor.must_change_password = False
     await db.commit()
     return {"message": "Password changed successfully"}
@@ -173,7 +173,7 @@ async def vendor_forgot_password(data: schemas.VendorForgotPassword, background_
             otp = utils.generate_otp()
             redis_client.set(f"reset_vendor:{vendor.phone}", otp, ex=600)
             increment_otp_count(vendor.phone)
-            background_tasks.add_task(service.send_otp_email, vendor.phone, vendor.name, otp, "reset")
+            background_tasks.add_task(service.send_otp_email, vendor.phone, vendor.business_name, otp, "reset")
         except HTTPException:
             pass
     return {"message": msg}
@@ -199,7 +199,7 @@ async def reset_vendor_password(phone: str, new_password: str, db: AsyncSession 
     vendor = await service.get_vendor_by_phone(db, phone)
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
-    vendor.password_hash = utils.hash_password(new_password)
+    vendor.user.hashed_password = utils.hash_password(new_password)
     vendor.must_change_password = True
     await db.commit()
     return {"message": "Vendor password completely reset by Admin. Vendor forced to change on next login."}

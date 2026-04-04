@@ -7,45 +7,58 @@ from app.config import settings
 import aiosmtplib
 from email.message import EmailMessage
 
+from sqlalchemy.orm import selectinload
+
 async def create_user(db: AsyncSession, data):
     new_user = User(
-        name=data.name,
-        register_number=data.register_number,
         email=data.email,
-        password_hash=hash_password(data.password),
+        hashed_password=hash_password(data.password),
         role=data.role,
         is_verified=False if data.email else True
     )
     db.add(new_user)
+    await db.flush()
+    
+    from app.users.models import Student
+    new_student = Student(
+        user_id=new_user.id,
+        register_no=data.register_number,
+        name=data.name
+    )
+    db.add(new_student)
     await db.commit()
     await db.refresh(new_user)
     return new_user
 
 async def get_user_by_register_number(db: AsyncSession, reg_no: str):
-    result = await db.execute(select(User).where(User.register_number == reg_no))
+    from app.users.models import Student
+    stmt = select(User).join(Student).where(Student.register_no == reg_no).options(selectinload(User.student_profile))
+    result = await db.execute(stmt)
     return result.scalars().first()
 
 async def get_user_by_email(db: AsyncSession, email: str):
-    result = await db.execute(select(User).where(User.email == email))
+    stmt = select(User).where(User.email == email).options(selectinload(User.student_profile), selectinload(User.vendor_profile))
+    result = await db.execute(stmt)
     return result.scalars().first()
 
 async def get_vendor_by_phone(db: AsyncSession, phone: str):
-    result = await db.execute(select(Vendor).where(Vendor.phone == phone))
+    stmt = select(Vendor).where(Vendor.phone == phone).options(selectinload(Vendor.user))
+    result = await db.execute(stmt)
     return result.scalars().first()
 
 async def authenticate_user(db: AsyncSession, register_number: str, password: str):
     user = await get_user_by_register_number(db, register_number)
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+    if not verify_password(password, user.hashed_password):
         return None
     return user
 
 async def authenticate_vendor(db: AsyncSession, phone: str, password: str):
     vendor = await get_vendor_by_phone(db, phone)
-    if not vendor:
+    if not vendor or not vendor.user:
         return None
-    if not verify_password(password, vendor.password_hash):
+    if not verify_password(password, vendor.user.hashed_password):
         return None
     return vendor
 
@@ -58,13 +71,13 @@ async def mark_user_verified(db: AsyncSession, register_number: str):
 async def reset_user_password(db: AsyncSession, register_number: str, new_password: str):
     user = await get_user_by_register_number(db, register_number)
     if user:
-        user.password_hash = hash_password(new_password)
+        user.hashed_password = hash_password(new_password)
         await db.commit()
 
 async def reset_vendor_password_otp(db: AsyncSession, phone: str, new_password: str):
     vendor = await get_vendor_by_phone(db, phone)
-    if vendor:
-        vendor.password_hash = hash_password(new_password)
+    if vendor and vendor.user:
+        vendor.user.hashed_password = hash_password(new_password)
         await db.commit()
 
 async def send_otp_email(email_or_phone: str, name: str, otp: str, purpose: str = "verify"):

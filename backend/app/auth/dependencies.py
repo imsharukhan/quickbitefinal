@@ -21,7 +21,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if not user_id or role not in ["student", "staff"] or token_type != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(select(User).where(User.id == user_id).options(selectinload(User.student_profile)))
     user = result.scalars().first()
 
     if not user:
@@ -41,12 +42,13 @@ async def get_current_vendor(credentials: HTTPAuthorizationCredentials = Depends
     if not vendor_id or role != "vendor" or token_type != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid vendor token")
 
-    result = await db.execute(select(Vendor).where(Vendor.id == vendor_id))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(select(Vendor).where(Vendor.user_id == vendor_id).options(selectinload(Vendor.user)))
     vendor = result.scalars().first()
 
-    if not vendor:
+    if not vendor or not vendor.user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Vendor not found")
-    if not vendor.is_active:
+    if not vendor.user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Vendor is deactivated")
         
     return vendor

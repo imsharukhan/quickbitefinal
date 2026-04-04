@@ -32,7 +32,15 @@ export function AuthProvider({ children }) {
       if (role !== 'vendor') {
         authService.getMe().then(res => {
           setUser(prev => ({ ...prev, ...res.data }))
-        }).catch(() => {})
+        }).catch((e) => {
+          if (e?.response?.status === 401 || (e?.response && e.response.status === 401)) {
+            authService.clearAuthData();
+            setUser(null);
+            setRole(null);
+            setIsLoggedIn(false);
+            setMustChangePassword(false);
+          }
+        })
       }
     } else {
       // No valid token - clear everything and show login

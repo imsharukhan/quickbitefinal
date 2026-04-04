@@ -11,6 +11,10 @@ router = APIRouter()
 async def list_outlets(db: AsyncSession = Depends(get_db)):
     return await service.get_all_outlets(db)
 
+@router.get("/me", response_model=list[schemas.OutletResponse])
+async def get_my_outlets(current_vendor = Depends(get_current_vendor), db: AsyncSession = Depends(get_db)):
+    return await service.get_outlets_by_vendor(db, str(current_vendor.id))
+
 @router.get("/{id}", response_model=schemas.OutletResponse)
 async def get_outlet(id: str, db: AsyncSession = Depends(get_db)):
     outlet = await service.get_outlet_by_id(db, id)

@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, ConfigDict
 import pytz
 
 IST = pytz.timezone('Asia/Kolkata')
@@ -30,6 +30,8 @@ class OutletUpdate(BaseModel):
     is_open: Optional[bool] = None
 
 class OutletResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     vendor_id: UUID
     name: str

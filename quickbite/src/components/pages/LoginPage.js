@@ -28,7 +28,7 @@ export default function LoginPage({ navigate }) {
       }
     } catch (err) {
       if (err.response && (err.response.status === 401 || err.response.status === 400 || err.response.status === 403 || err.response.status === 422)) {
-        setError('Incorrect register number or password.');
+        setError(tab === 'student' ? 'Incorrect register number or password.' : 'Invalid Credentials');
       } else {
         setError('Login failed. Please try again.');
       }

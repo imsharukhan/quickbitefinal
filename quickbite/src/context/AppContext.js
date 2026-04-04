@@ -38,6 +38,9 @@ export function AppProvider({ children }) {
             setOrders(data || []);
         } catch(e) {
             console.error(e);
+            if (e?.response?.status === 401 || (e?.response && e.response.status === 401)) {
+                if (typeof window !== 'undefined') window.dispatchEvent(new Event('auth:logout'));
+            }
         } finally {
             setIsOrdersLoading(false);
         }
@@ -50,6 +53,9 @@ export function AppProvider({ children }) {
             setNotifications(data.notifications || []);
         } catch(e) {
             console.error(e);
+            if (e?.response?.status === 401 || (e?.response && e.response.status === 401)) {
+                if (typeof window !== 'undefined') window.dispatchEvent(new Event('auth:logout'));
+            }
         } finally {
             setIsNotifsLoading(false);
         }

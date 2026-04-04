@@ -50,7 +50,7 @@ export default function VendorDashboard({ showToast }) {
  
     const loadOutlets = () => {
         outletManagementService.getMyOutlets().then(data => {
-            const myOutlets = data.filter(o => o.vendor_id === user.id);
+            const myOutlets = data;
             setOutlets(myOutlets);
             if (!selectedOutlet && myOutlets.length > 0) setSelectedOutlet(myOutlets[0]);
             if (myOutlets.length === 0) setLoading(false);
