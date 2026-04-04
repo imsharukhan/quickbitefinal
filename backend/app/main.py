@@ -20,7 +20,7 @@ async def seed_data():
             stmt = select(User).where(User.email == "student@test.com")
             result = await db.execute(stmt)
             if not result.scalars().first():
-                user = User(email="student@test.com", role="student", hashed_password=hash_password("Sharukhan@123"), is_active=True, is_verified=True, must_change_password=False)
+                user = User(email="student@test.com", role="student", hashed_password=hash_password("Sharu123"), is_active=True, is_verified=True, must_change_password=False)
                 db.add(user)
                 await db.flush()  # So user.id is available for student
                 student = Student(user_id=user.id, register_no="11523040468", name="Sharukhan")
@@ -32,7 +32,7 @@ async def seed_data():
             result = await db.execute(stmt)
             dimora_user = result.scalars().first()
             if not dimora_user:
-                dimora_user = User(email="dimora@test.com", role="vendor", hashed_password=hash_password("Dimora@123"), is_active=True, is_verified=True, must_change_password=True)
+                dimora_user = User(email="dimora@test.com", role="vendor", hashed_password=hash_password("dimora123"), is_active=True, is_verified=True, must_change_password=True)
                 db.add(dimora_user)
                 await db.commit()
                 await db.refresh(dimora_user)
@@ -52,7 +52,7 @@ async def seed_data():
             result = await db.execute(stmt)
             reenu_user = result.scalars().first()
             if not reenu_user:
-                reenu_user = User(email="reenu@test.com", role="vendor", hashed_password=hash_password("Reenu@123"), is_active=True, is_verified=True, must_change_password=True)
+                reenu_user = User(email="reenu@test.com", role="vendor", hashed_password=hash_password("reenu123"), is_active=True, is_verified=True, must_change_password=True)
                 db.add(reenu_user)
                 await db.commit()
                 await db.refresh(reenu_user)
@@ -71,7 +71,7 @@ async def seed_data():
             result = await db.execute(stmt)
             bhojan_user = result.scalars().first()
             if not bhojan_user:
-                bhojan_user = User(email="bhojan@test.com", role="vendor", hashed_password=hash_password("Bhojans@123"), is_active=True, is_verified=True, must_change_password=True)
+                bhojan_user = User(email="bhojan@test.com", role="vendor", hashed_password=hash_password("bhojan123"), is_active=True, is_verified=True, must_change_password=True)
                 db.add(bhojan_user)
                 await db.commit()
                 await db.refresh(bhojan_user)
