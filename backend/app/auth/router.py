@@ -5,7 +5,10 @@ from app.redis_client import redis_client
 from app.config import settings
 from app.auth import schemas, service, utils
 from app.auth.dependencies import get_current_user, get_current_vendor, get_current_user_or_vendor
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from app.auth.dependencies import get_current_user, get_current_vendor, get_current_user_or_vendor
 
+security = HTTPBearer()
 router = APIRouter()
 
 def check_otp_rate_limit(register_number: str):
@@ -205,7 +208,8 @@ async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get
 
     access_token = utils.create_access_token({"sub": str(vendor.user.id), "role": "vendor"})
     refresh_token = utils.create_refresh_token({"sub": str(vendor.user.id), "role": "vendor"})
-    redis_client.set(f"refresh:{vendor.user.id}", refresh_token, ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
+    session_key = f"refresh:vendor:{vendor.user.id}:{refresh_token[-12:]}"
+    redis_client.set(session_key, refresh_token, ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
 
     return {
         "access_token": access_token,
@@ -294,15 +298,34 @@ async def refresh_token(data: schemas.RefreshRequest):
     if not user_id or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid refresh token payload")
 
-    stored_token = redis_client.get(f"refresh:{user_id}")
-    if not stored_token or str(stored_token) != data.refresh_token:
-        raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
+    if role == "vendor":
+        keys = redis_client.keys(f"refresh:vendor:{user_id}:*")
+        valid = any(redis_client.get(k) == data.refresh_token for k in (keys or []))
+        if not valid:
+            raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
+    else:
+        stored_token = redis_client.get(f"refresh:{user_id}")
+        if not stored_token or str(stored_token) != data.refresh_token:
+            raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
 
     access_token = utils.create_access_token({"sub": user_id, "role": role})
     return {"access_token": access_token}
 
 # ── Logout ─────────────────────────────────────────────────────────────────────
 @router.post("/logout")
-async def logout(current=Depends(get_current_user_or_vendor)):
-    redis_client.delete(f"refresh:{current.id}")
+async def logout(credentials: HTTPAuthorizationCredentials = Depends(security), current=Depends(get_current_user_or_vendor)):
+    # For vendors delete only THIS device's session, not all sessions
+    token = credentials.credentials
+    payload = utils.decode_token(token)
+    role = payload.get("role")
+    user_id = str(current.user.id if hasattr(current, 'user') else current.id)
+
+    if role == "vendor":
+        keys = redis_client.keys(f"refresh:vendor:{user_id}:*")
+        # We can't match exact token here since we only have the access token
+        # So delete all sessions for this vendor on explicit logout
+        for k in (keys or []):
+            redis_client.delete(k)
+    else:
+        redis_client.delete(f"refresh:{user_id}")
     return {"message": "Logged out successfully"}
