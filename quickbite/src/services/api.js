@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: "https://quickbitefinal-production.up.railway.app",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://quickbitefinal-production.up.railway.app",
 });
 
 api.interceptors.request.use(
@@ -68,7 +68,7 @@ api.interceptors.response.use(
               return reject({ response: { status: 401 } });
             }
             
-            axios.post("https://quickbitefinal-production.up.railway.app/api/auth/refresh",{
+            axios.post(`${process.env.NEXT_PUBLIC_API_URL || "https://quickbitefinal-production.up.railway.app"}/api/auth/refresh`, {
               refresh_token: refreshToken
             }).then(({ data }) => {
               localStorage.setItem('qb_token', data.access_token);

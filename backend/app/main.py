@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime, timezone
 
 from app.database import create_tables
-
 from app.users.models import User, Student
 from app.vendors.models import Vendor
 from app.outlets.models import Outlet
@@ -13,30 +13,26 @@ from app.notifications.models import Notification
 from app.auth.utils import hash_password
 from sqlalchemy.future import select
 
+
 async def seed_data():
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         try:
-            stmt = select(User).where(User.email == "student@test.com")
-            result = await db.execute(stmt)
-            if not result.scalars().first():
-                user = User(email="student@test.com", role="student", hashed_password=hash_password("Sharu123"), is_active=True, is_verified=True, must_change_password=False)
-                db.add(user)
-                await db.flush()  # So user.id is available for student
-                student = Student(user_id=user.id, register_no="11523040468", name="Sharukhan")
-                db.add(student)
-                await db.commit()
-                
-            # Vendor 1 - Dimora
+            # ── Vendor 1 - Dimora ──────────────────────────────────────
             stmt = select(User).where(User.email == "dimora@test.com")
             result = await db.execute(stmt)
             dimora_user = result.scalars().first()
             if not dimora_user:
-                dimora_user = User(email="dimora@test.com", role="vendor", hashed_password=hash_password("dimora123"), is_active=True, is_verified=True, must_change_password=True)
+                dimora_user = User(
+                    email="dimora@test.com",
+                    role="vendor",
+                    hashed_password=hash_password("dimora123"),
+                    is_active=True, is_verified=True, must_change_password=True,
+                )
                 db.add(dimora_user)
                 await db.commit()
                 await db.refresh(dimora_user)
-                print(f"Vendor 999 seeded with hashed password: {dimora_user.hashed_password}")
+                print("✅ Vendor Dimora user seeded.")
 
             stmt = select(Vendor).where(Vendor.phone == "9999999999")
             result = await db.execute(stmt)
@@ -47,16 +43,33 @@ async def seed_data():
                 await db.commit()
                 await db.refresh(dimora_vendor)
 
-            # Vendor 2 - Reenu
+            # ── Outlet for Dimora ──────────────────────────────────────
+            stmt = select(Outlet).where(Outlet.vendor_id == dimora_vendor.id)
+            result = await db.execute(stmt)
+            if not result.scalars().first():
+                db.add(Outlet(
+                    vendor_id=dimora_vendor.id,
+                    name="Dimora Central", description="Main Academic Block",
+                    is_open=True, rating=0.0, opening_time="08:00", closing_time="20:00", slot_duration_minutes=15
+                ))
+                await db.commit()
+                print("✅ Outlet Dimora seeded.")
+
+            # ── Vendor 2 - Reenu ───────────────────────────────────────
             stmt = select(User).where(User.email == "reenu@test.com")
             result = await db.execute(stmt)
             reenu_user = result.scalars().first()
             if not reenu_user:
-                reenu_user = User(email="reenu@test.com", role="vendor", hashed_password=hash_password("reenu123"), is_active=True, is_verified=True, must_change_password=True)
+                reenu_user = User(
+                    email="reenu@test.com",
+                    role="vendor",
+                    hashed_password=hash_password("reenu123"),
+                    is_active=True, is_verified=True, must_change_password=True,
+                )
                 db.add(reenu_user)
                 await db.commit()
                 await db.refresh(reenu_user)
-            
+
             stmt = select(Vendor).where(Vendor.phone == "8888888888")
             result = await db.execute(stmt)
             reenu_vendor = result.scalars().first()
@@ -65,17 +78,34 @@ async def seed_data():
                 db.add(reenu_vendor)
                 await db.commit()
                 await db.refresh(reenu_vendor)
-                
-            # Vendor 3 - Bhojan
+
+            # ── Outlet for Reenu ───────────────────────────────────────
+            stmt = select(Outlet).where(Outlet.vendor_id == reenu_vendor.id)
+            result = await db.execute(stmt)
+            if not result.scalars().first():
+                db.add(Outlet(
+                    vendor_id=reenu_vendor.id,
+                    name="Reenu Food Court", description="Near Library",
+                    is_open=True, rating=0.0, opening_time="08:00", closing_time="20:00", slot_duration_minutes=15
+                ))
+                await db.commit()
+                print("✅ Outlet Reenu seeded.")
+
+            # ── Vendor 3 - Bhojan ──────────────────────────────────────
             stmt = select(User).where(User.email == "bhojan@test.com")
             result = await db.execute(stmt)
             bhojan_user = result.scalars().first()
             if not bhojan_user:
-                bhojan_user = User(email="bhojan@test.com", role="vendor", hashed_password=hash_password("bhojan123"), is_active=True, is_verified=True, must_change_password=True)
+                bhojan_user = User(
+                    email="bhojan@test.com",
+                    role="vendor",
+                    hashed_password=hash_password("bhojan123"),
+                    is_active=True, is_verified=True, must_change_password=True,
+                )
                 db.add(bhojan_user)
                 await db.commit()
                 await db.refresh(bhojan_user)
-                
+
             stmt = select(Vendor).where(Vendor.phone == "7777777777")
             result = await db.execute(stmt)
             bhojan_vendor = result.scalars().first()
@@ -84,33 +114,24 @@ async def seed_data():
                 db.add(bhojan_vendor)
                 await db.commit()
                 await db.refresh(bhojan_vendor)
-                
-            # Outlets
-            stmt = select(Outlet).where(Outlet.name == "Dimora")
-            result = await db.execute(stmt)
-            dimora_outlet = result.scalars().first()
-            if not dimora_outlet:
-                dimora_outlet = Outlet(vendor_id=dimora_vendor.id, name="Dimora", description="Near Academic Block", opening_time="08:00", closing_time="20:00", is_open=True, image_url="/images/dimora.jpg")
-                db.add(dimora_outlet)
-                
-            stmt = select(Outlet).where(Outlet.name == "Reenu")
-            result = await db.execute(stmt)
-            reenu_outlet = result.scalars().first()
-            if not reenu_outlet:
-                reenu_outlet = Outlet(vendor_id=reenu_vendor.id, name="Reenu", description="Food Court", opening_time="08:00", closing_time="20:00", is_open=True, image_url="/images/reenu.jpg")
-                db.add(reenu_outlet)
-                
-            stmt = select(Outlet).where(Outlet.name == "Bhojan")
-            result = await db.execute(stmt)
-            bhojan_outlet = result.scalars().first()
-            if not bhojan_outlet:
-                bhojan_outlet = Outlet(vendor_id=bhojan_vendor.id, name="Bhojan", description="Inside Hospital", opening_time="08:00", closing_time="20:00", is_open=True, image_url="/images/bhojan.jpg")
-                db.add(bhojan_outlet)
 
-            await db.commit()
+            # ── Outlet for Bhojan ──────────────────────────────────────
+            stmt = select(Outlet).where(Outlet.vendor_id == bhojan_vendor.id)
+            result = await db.execute(stmt)
+            if not result.scalars().first():
+                db.add(Outlet(
+                    vendor_id=bhojan_vendor.id,
+                    name="Bhojan Express", description="Hospital Block",
+                    is_open=True, rating=0.0, opening_time="08:00", closing_time="20:00", slot_duration_minutes=15
+                ))
+                await db.commit()
+                print("✅ Outlet Bhojan seeded.")
+
+            print("✅ All vendor seeds complete. Students self-register.")
+
         except Exception as e:
             await db.rollback()
-            print(f"Error seeding data: {e}")
+            print(f"❌ Error seeding data: {e}")
 
 # Routers
 from app.auth.router import router as auth_router
@@ -122,39 +143,35 @@ from app.orders.router import router as orders_router
 from app.notifications.router import router as notifications_router
 from app.admin.router import router as admin_router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.database import engine, Base
     from sqlalchemy import text
+
+    # ── Transaction 1: ALTER TABLE alone (commits immediately) ────────
     try:
         async with engine.begin() as conn:
-            # 1. Create the Tables
             await conn.run_sync(Base.metadata.create_all)
-            
-            # 2. Force-Insert the 3 Canteens so they are ALWAYS there
-            # We use 'ON CONFLICT' so it doesn't error if they already exist
-            await conn.execute(text("""
-                INSERT INTO outlets (id, name, description, is_open) 
-                VALUES 
-                (1, 'Dimora Central', 'Main Academic Block', true),
-                (2, 'Reenu Food Court', 'Near Library', true),
-                (3, 'Bhojan Express', 'Hospital Block', true)
-                ON CONFLICT (id) DO UPDATE SET 
-                    name = EXCLUDED.name,
-                    description = EXCLUDED.description;
-            """))
-        print("✅ Success: Canteens are LIVE in the Database!")
+            print("✅ Column check: must_change_password is present.")
     except Exception as e:
-        print(f"❌ Database Error: {e}")
+        print(f"❌ Migration Error: {e}")
+
+    
+    # ── Step 3: Seed vendor accounts ──────────────────────────────────
+    await seed_data()
     yield
+
 
 app = FastAPI(title="QuickBite API", lifespan=lifespan)
 
-# --- THE CORS FIX IS RIGHT HERE ---
-# --- THE PRECISE CORS FIX ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://quickbitefinal.vercel.app"], # SPECIFIC URL, NOT "*"
+    allow_origins=[
+        "https://quickbitefinal.vercel.app",
+        "http://localhost:3000",        # ✅ local dev
+        "http://localhost:3001",        # ✅ just in case
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -164,11 +181,11 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "app": "QuickBite API"}
 
-app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-app.include_router(users_router, prefix="/api/users", tags=["users"])
-app.include_router(vendors_router, prefix="/api/vendors", tags=["vendors"])
-app.include_router(outlets_router, prefix="/api/outlets", tags=["outlets"])
-app.include_router(menu_router, prefix="/api/menu", tags=["menu"])
-app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
+app.include_router(auth_router,          prefix="/api/auth",          tags=["auth"])
+app.include_router(users_router,         prefix="/api/users",         tags=["users"])
+app.include_router(vendors_router,       prefix="/api/vendors",       tags=["vendors"])
+app.include_router(outlets_router,       prefix="/api/outlets",       tags=["outlets"])
+app.include_router(menu_router,          prefix="/api/menu",          tags=["menu"])
+app.include_router(orders_router,        prefix="/api/orders",        tags=["orders"])
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
-app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+app.include_router(admin_router,         prefix="/api/admin",         tags=["admin"])

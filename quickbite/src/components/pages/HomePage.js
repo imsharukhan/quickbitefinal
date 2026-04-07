@@ -132,11 +132,11 @@ export default function HomePage({ navigate }) {
 
       {/* Loading */}
       {loading && (
-        <div className="outlet-grid">
+        <div className="custom-outlet-grid">
           {[1, 2, 3].map(i => (
             <div key={i} style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'white', border: '1px solid var(--border-light)' }}>
-              <div className="skeleton" style={{ height: '140px' }} />
-              <div style={{ padding: '14px' }}>
+              <div className="skeleton" style={{ height: '180px' }} />
+              <div style={{ padding: '20px' }}>
                 <div className="skeleton skeleton-text" style={{ width: '60%' }} />
                 <div className="skeleton skeleton-text" style={{ width: '40%' }} />
               </div>
@@ -179,7 +179,7 @@ export default function HomePage({ navigate }) {
               🟢 Open Now <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>({openOutlets.length})</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style={{ marginBottom: '28px' }}>
+          <div className="custom-outlet-grid">
             {openOutlets.map(o => (
               <OutletCard key={o.id} outlet={o} onClick={() => navigate('menu', o)} />
             ))}
@@ -195,7 +195,7 @@ export default function HomePage({ navigate }) {
               🔴 Closed <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>({closedOutlets.length})</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style={{ marginBottom: '28px', opacity: 0.7 }}>
+          <div className="custom-outlet-grid" style={{ opacity: 0.7 }}>
             {closedOutlets.map(o => (
               <OutletCard key={o.id} outlet={o} onClick={() => navigate('menu', o)} />
             ))}
@@ -203,6 +203,20 @@ export default function HomePage({ navigate }) {
         </>
       )}
 
+      {/* Grid Layout Styles */}
+      <style>{`
+        .custom-outlet-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 24px;
+          margin-bottom: 28px;
+        }
+        @media (min-width: 1024px) {
+          .custom-outlet-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -210,18 +224,34 @@ export default function HomePage({ navigate }) {
 function OutletCard({ outlet, onClick }) {
   const rating = outlet.rating ? parseFloat(outlet.rating).toFixed(1) : '—';
 
+  const getMappedImage = (name) => {
+    if (name.includes('Dimora')) return '/images/dimora.jpg';
+    if (name.includes('Reenu')) return '/images/reenu.jpg';
+    if (name.includes('Bhojan')) return '/images/bhojan.jpg';
+    return outlet.image_url;
+  };
+  const imageUrl = getMappedImage(outlet.name);
+
   return (
     <div 
-      className="bg-white rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1" 
+      className="bg-white rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 transform" 
       onClick={onClick}
-      style={{ border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column' }}
+      style={{ 
+        border: '1px solid var(--border-light)', 
+        display: 'flex', 
+        flexDirection: 'column',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <div className="aspect-video w-full overflow-hidden relative" style={{ backgroundColor: 'var(--primary)' }}>
-        {outlet.image_url ? (
+      <div className="aspect-video w-full overflow-hidden relative" style={{ backgroundColor: 'var(--primary)', aspectRatio: '16/9' }}>
+        {imageUrl ? (
           <img 
-            src={outlet.image_url} 
+            src={imageUrl} 
             alt={outlet.name} 
-            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            className="transition-transform duration-500 hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-white" style={{ fontSize: '3rem', fontWeight: 'bold' }}>
@@ -229,8 +259,8 @@ function OutletCard({ outlet, onClick }) {
           </div>
         )}
         {!outlet.is_open && (
-           <div style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.6)', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, backdropFilter: 'blur(4px)' }}>
-             Closed
+           <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, backdropFilter: 'blur(4px)' }}>
+             🔴 Closed
            </div>
         )}
         {outlet.rating >= 4.5 && outlet.is_open && (
@@ -239,10 +269,10 @@ function OutletCard({ outlet, onClick }) {
            </div>
         )}
       </div>
-      <div className="p-4 flex-1 flex flex-col">
-        <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text)', marginBottom: '4px' }}>{outlet.name}</h3>
+      <div className="flex-1 flex flex-col" style={{ padding: '20px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text)', marginBottom: '6px' }}>{outlet.name}</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>{outlet.description || outlet.cuisine || 'Campus Canteen'}</p>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
           <span style={{ fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}>
             <span style={{ color: '#FFB800' }}>⭐</span> {rating}
           </span>

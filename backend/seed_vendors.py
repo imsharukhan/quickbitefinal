@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import os
 from sqlalchemy import text
@@ -34,7 +37,7 @@ async def seed():
 
         print("🚀 STEP 2: Seeding Vendors...")
         VENDORS = [
-            {"phone": "9000000001", "name": "Dimora Central", "password": "password123"},
+            {"phone": "9999999999", "name": "Dimora Central", "password": "dimora123"},
             {"phone": "9000000002", "name": "Reenu Food Court", "password": "password123"},
             {"phone": "9000000003", "name": "Bhojan Express", "password": "password123"},
         ]
