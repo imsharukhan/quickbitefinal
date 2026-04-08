@@ -1,8 +1,10 @@
 'use client';
 import axios from 'axios';
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://quickbitefinal-production.up.railway.app",
+  baseURL: BASE_URL,  // ← Fix 1: no hardcoded railway URL
 });
 
 api.interceptors.request.use(
@@ -31,33 +33,32 @@ const processQueue = (error, token = null) => {
 
 export const clearAuthData = () => {
   if (typeof window === 'undefined') return;
-  ['qb_token', 'qb_refresh', 'qb_role', 'qb_user_id', 'qb_name', 'qb_must_change'].forEach(key => localStorage.removeItem(key));
+  ['qb_token', 'qb_refresh', 'qb_role', 'qb_user_id', 'qb_name', 'qb_must_change']
+    .forEach(key => localStorage.removeItem(key));
 };
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response && error.response.status === 401 && originalRequest) {
       if (originalRequest._retry) {
         return Promise.reject(error);
       }
-      
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then(token => {
           originalRequest.headers['Authorization'] = 'Bearer ' + token;
           return api(originalRequest);
-        }).catch(err => {
-          return Promise.reject(err);
-        });
+        }).catch(err => Promise.reject(err));
       }
-      
+
       originalRequest._retry = true;
       isRefreshing = true;
-      
+
       return new Promise((resolve, reject) => {
         try {
           if (typeof window !== 'undefined') {
@@ -67,8 +68,9 @@ api.interceptors.response.use(
               window.dispatchEvent(new Event('auth:logout'));
               return reject({ response: { status: 401 } });
             }
-            
-            axios.post(`${process.env.NEXT_PUBLIC_API_URL || "https://quickbitefinal-production.up.railway.app"}/api/auth/refresh`, {
+
+            // ← Fix 2: use api instance (uses baseURL) instead of raw axios with hardcoded URL
+            api.post('/api/auth/refresh', {
               refresh_token: refreshToken
             }).then(({ data }) => {
               localStorage.setItem('qb_token', data.access_token);
@@ -83,6 +85,7 @@ api.interceptors.response.use(
             }).finally(() => {
               isRefreshing = false;
             });
+
           } else {
             reject(error);
             isRefreshing = false;
@@ -98,7 +101,7 @@ api.interceptors.response.use(
         }
       });
     }
-    
+
     return Promise.reject(error);
   }
 );
