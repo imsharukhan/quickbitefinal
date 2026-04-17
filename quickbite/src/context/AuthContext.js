@@ -22,18 +22,23 @@ export function AuthProvider({ children }) {
     const role = localStorage.getItem('qb_role')
     const name = localStorage.getItem('qb_name')
     const user_id = localStorage.getItem('qb_user_id')
+    const email = localStorage.getItem('qb_email')           // add this
+    const register_number = localStorage.getItem('qb_register_number') // add this
     const mustChange = localStorage.getItem('qb_must_change') === 'true'
-    
+
     if (token && token !== 'null' && token !== 'undefined' && role) {
-      setUser({ id: user_id, name: name, role: role })
+      setUser({ id: user_id, name, role, email, register_number })
       setRole(role)
       setIsLoggedIn(true)
       setMustChangePassword(mustChange)
       if (role !== 'vendor') {
         authService.getMe().then(res => {
+          // Persist full profile to localStorage for offline/refresh resilience
+          if (res.data.email) localStorage.setItem('qb_email', res.data.email);
+          if (res.data.register_number) localStorage.setItem('qb_register_number', res.data.register_number);
           setUser(prev => ({ ...prev, ...res.data }))
         }).catch((e) => {
-          if (e?.response?.status === 401 || (e?.response && e.response.status === 401)) {
+          if (e?.response?.status === 401) {
             authService.clearAuthData();
             setUser(null);
             setRole(null);

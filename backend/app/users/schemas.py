@@ -1,12 +1,14 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     name: str
-    email: Optional[EmailStr]
+    email: Optional[str] = None
     register_number: str
     role: str
     is_verified: bool

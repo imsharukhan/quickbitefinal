@@ -11,9 +11,15 @@ router = APIRouter()
 async def list_outlets(db: AsyncSession = Depends(get_db)):
     return await service.get_all_outlets(db)
 
+# ✅ /me MUST come before /{id}
 @router.get("/me", response_model=list[schemas.OutletResponse])
 async def get_my_outlets(current_vendor = Depends(get_current_vendor), db: AsyncSession = Depends(get_db)):
     return await service.get_outlets_by_vendor(db, str(current_vendor.id))
+
+# ✅ /{id} comes AFTER all fixed-path routes
+@router.get("/{id}/slots", response_model=list[schemas.TimeSlotResponse])
+async def get_time_slots(id: str, date: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
+    return await service.get_available_time_slots(db, id, date)
 
 @router.get("/{id}", response_model=schemas.OutletResponse)
 async def get_outlet(id: str, db: AsyncSession = Depends(get_db)):
@@ -21,10 +27,6 @@ async def get_outlet(id: str, db: AsyncSession = Depends(get_db)):
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet not found")
     return outlet
-
-@router.get("/{id}/slots", response_model=list[schemas.TimeSlotResponse])
-async def get_time_slots(id: str, date: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
-    return await service.get_available_time_slots(db, id, date)
 
 @router.post("", response_model=schemas.OutletResponse, dependencies=[Depends(get_current_admin)])
 async def create_outlet_admin(data: schemas.OutletCreate, db: AsyncSession = Depends(get_db)):

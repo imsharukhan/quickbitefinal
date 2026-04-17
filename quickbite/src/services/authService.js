@@ -25,7 +25,8 @@ export const getAuthData = () => {
 
 export const clearAuthData = () => {
   if (typeof window === 'undefined') return;
-  ['qb_token', 'qb_refresh', 'qb_role', 'qb_user_id', 'qb_name', 'qb_must_change']
+  ['qb_token', 'qb_refresh', 'qb_role', 'qb_user_id', 'qb_name', 
+   'qb_must_change', 'qb_email', 'qb_register_number']  // add these two
   .forEach(key => localStorage.removeItem(key));
 };
 
