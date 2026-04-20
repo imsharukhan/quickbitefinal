@@ -40,7 +40,8 @@ def decode_token(token: str) -> dict:
         )
 
 def generate_otp() -> str:
-    return "123456"
+    """Generate a secure random 6-digit OTP."""
+    return str(random.randint(100000, 999999))
 
 def generate_order_id() -> str:
     chars = string.ascii_uppercase + string.digits

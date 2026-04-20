@@ -41,11 +41,13 @@ class ResendOTP(BaseModel):
 class ForgotPassword(BaseModel):
     email: EmailStr
 
+# ── CHANGED: phone → email for vendor forgot password ─────────────────────────
 class VendorForgotPassword(BaseModel):
-    phone: str
+    email: EmailStr
 
+# ── CHANGED: phone → email for vendor reset password ──────────────────────────
 class VendorResetPassword(BaseModel):
-    phone: str
+    email: str
     otp: str
     new_password: str
 

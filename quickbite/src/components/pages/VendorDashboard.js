@@ -205,11 +205,18 @@ export default function VendorDashboard({ showToast }) {
         await logout();
     };
  
-    const getNextAction = (status) => {
-        if (status === 'Placed') return { label: '✅ Confirm Payment', newStatus: 'Preparing', bg: 'var(--green)', color: 'white' };
-        if (status === 'Preparing') return { label: '🔔 Mark Ready', newStatus: 'Ready for Pickup', bg: 'var(--primary)', color: 'white' };
-        if (status === 'Ready for Pickup') return { label: '✓ Complete', newStatus: 'Picked Up', bg: '#1b5e20', color: 'white' };
+    const getNextAction = (status, paymentStatus) => {
+    if (status === 'Placed') {
+        if (paymentStatus === 'PENDING') {
+        // Payment not done yet — vendor can only cancel, not proceed
         return null;
+        }
+        // Payment confirmed by Razorpay — vendor starts preparing
+        return { label: '🍳 Start Preparing', newStatus: 'Preparing', bg: 'var(--green)', color: 'white' };
+    }
+    if (status === 'Preparing') return { label: '🔔 Mark Ready', newStatus: 'Ready for Pickup', bg: 'var(--primary)', color: 'white' };
+    if (status === 'Ready for Pickup') return { label: '✓ Complete', newStatus: 'Picked Up', bg: '#1b5e20', color: 'white' };
+    return null;
     };
  
     const filteredOrders = filterStatus === 'all' ? orders : orders.filter(o => o.status === filterStatus);
@@ -319,7 +326,9 @@ export default function VendorDashboard({ showToast }) {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {filteredOrders.map(order => {
-                                const action = !['Cancelled', 'Picked Up'].includes(order.status) ? getNextAction(order.status) : null;
+                                const action = !['Cancelled', 'Picked Up'].includes(order.status) 
+                                    ? getNextAction(order.status, order.payment_status) 
+                                    : null;
                                 const isLoading = actionLoading === order.id;
                                 const placedAtUTC = order.placed_at ? (order.placed_at.endsWith('Z') ? order.placed_at : order.placed_at + 'Z') : new Date().toISOString();
                                 const minsWaiting = order.status === 'Placed' ? Math.max(0, Math.floor((new Date() - new Date(placedAtUTC)) / 60000)) : 0;
@@ -347,17 +356,19 @@ export default function VendorDashboard({ showToast }) {
                                                 color: order.status === 'Placed' ? 'var(--blue)' : order.status === 'Preparing' ? 'var(--yellow)' : order.status === 'Ready for Pickup' ? 'var(--green)' : 'var(--text-muted)',
                                             }}>{order.status}</div>
                                         </div>
-                                        {order.status === 'Cancelled' ? (
-                                            <div style={{ padding: '8px 16px', background: 'var(--red-bg)' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--red)' }}>
-                                                    ❌ Cancelled
+                                        {order.payment_status === 'PENDING' && order.status === 'Placed' ? (
+                                            <div style={{ padding: '8px 16px', background: '#FFF3E0' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E65100' }}>
+                                                    ⏳ Waiting for student payment...
                                                 </span>
                                             </div>
+                                        ) : order.status === 'Cancelled' ? (
+                                            <div style={{ padding: '8px 16px', background: 'var(--red-bg)' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--red)' }}>❌ Cancelled</span>
+                                            </div>
                                         ) : (
-                                            <div style={{ padding: '8px 16px', background: (order.payment_status === 'PENDING' && order.status === 'Placed') ? 'var(--yellow-bg)' : 'var(--green-bg)' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: (order.payment_status === 'PENDING' && order.status === 'Placed') ? 'var(--yellow)' : 'var(--green)' }}>
-                                                    {(order.payment_status === 'PENDING' && order.status === 'Placed') ? '⏳ Payment Pending' : '✅ Payment Confirmed'}
-                                                </span>
+                                            <div style={{ padding: '8px 16px', background: 'var(--green-bg)' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>✅ Payment Confirmed</span>
                                             </div>
                                         )}
                                         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light)' }}>

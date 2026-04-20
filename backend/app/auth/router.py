@@ -11,16 +11,18 @@ from app.auth.dependencies import get_current_user, get_current_vendor, get_curr
 security = HTTPBearer()
 router = APIRouter()
 
-def check_otp_rate_limit(register_number: str):
-    count = redis_client.get(f"otp_count:{register_number}")
+
+def check_otp_rate_limit(key: str):
+    count = redis_client.get(f"otp_count:{key}")
     if count and int(count) >= 3:
         raise HTTPException(status_code=429, detail="Too many OTP requests. Try again after 1 hour.")
 
-def increment_otp_count(register_number: str):
-    key = f"otp_count:{register_number}"
-    count = redis_client.incr(key)
+def increment_otp_count(key: str):
+    redis_key = f"otp_count:{key}"
+    count = redis_client.incr(redis_key)
     if count == 1:
-        redis_client.expire(key, 3600)
+        redis_client.expire(redis_key, 3600)
+
 
 # ── Student: Register ──────────────────────────────────────────────────────────
 @router.post("/register")
@@ -45,7 +47,7 @@ async def register(data: schemas.StudentRegister, background_tasks: BackgroundTa
         redis_client.set(f"otp:{data.register_number}", otp, ex=600)
         increment_otp_count(data.register_number)
         background_tasks.add_task(service.send_otp_email, data.email, data.name, otp, "verify")
-        return {"message": "User registered successfully. OTP sent.", "user_id": str(user.id), "requires_otp": True}
+        return {"message": "User registered successfully. OTP sent to your email.", "user_id": str(user.id), "requires_otp": True}
 
     access_token = utils.create_access_token({"sub": str(user.id), "role": user.role})
     refresh_token = utils.create_refresh_token({"sub": str(user.id), "role": user.role})
@@ -59,8 +61,9 @@ async def register(data: schemas.StudentRegister, background_tasks: BackgroundTa
         "role": user.role,
         "user_id": str(user.id),
         "name": user.student_profile.name if user.student_profile else "",
-        "must_change_password": False  # Students never need to change password on register
+        "must_change_password": False
     }
+
 
 # ── Student: Verify OTP ────────────────────────────────────────────────────────
 @router.post("/verify-otp")
@@ -92,6 +95,7 @@ async def verify_otp(data: schemas.VerifyOTP, db: AsyncSession = Depends(get_db)
         }
     return {"message": "Email verified successfully"}
 
+
 # ── Student: Resend OTP ────────────────────────────────────────────────────────
 @router.post("/resend-otp")
 async def resend_otp(data: schemas.ResendOTP, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
@@ -105,24 +109,40 @@ async def resend_otp(data: schemas.ResendOTP, background_tasks: BackgroundTasks,
     otp = utils.generate_otp()
     redis_client.set(f"otp:{data.register_number}", otp, ex=600)
     increment_otp_count(data.register_number)
-    background_tasks.add_task(service.send_otp_email, user.email, user.student_profile.name if user.student_profile else "User", otp, "verify")
+    background_tasks.add_task(
+        service.send_otp_email,
+        user.email,
+        user.student_profile.name if user.student_profile else "User",
+        otp,
+        "verify"
+    )
     return {"message": "OTP resent successfully"}
+
 
 # ── Student: Forgot Password ───────────────────────────────────────────────────
 @router.post("/forgot-password")
 async def forgot_password(data: schemas.ForgotPassword, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     user = await service.get_user_by_email(db, data.email)
-    msg = "If that email is registered, an OTP has been sent"
+    msg = "If that email is registered, an OTP has been sent."
     if user:
         try:
-            check_otp_rate_limit(user.student_profile.register_no if user.student_profile else str(user.id))
+            rate_key = user.student_profile.register_no if user.student_profile else str(user.id)
+            check_otp_rate_limit(rate_key)
             otp = utils.generate_otp()
-            redis_client.set(f"reset:{user.student_profile.register_no if user.student_profile else user.id}", otp, ex=600)
-            increment_otp_count(user.student_profile.register_no if user.student_profile else str(user.id))
-            background_tasks.add_task(service.send_otp_email, user.email, user.student_profile.name if user.student_profile else "User", otp, "reset")
+            redis_key = f"reset:{user.student_profile.register_no if user.student_profile else user.id}"
+            redis_client.set(redis_key, otp, ex=600)
+            increment_otp_count(rate_key)
+            background_tasks.add_task(
+                service.send_otp_email,
+                user.email,
+                user.student_profile.name if user.student_profile else "User",
+                otp,
+                "reset"
+            )
         except HTTPException:
             pass
     return {"message": msg}
+
 
 # ── Student: Reset Password ────────────────────────────────────────────────────
 @router.post("/reset-password")
@@ -138,6 +158,7 @@ async def reset_password(data: schemas.ResetPassword, db: AsyncSession = Depends
     await service.reset_user_password(db, data.register_number, data.new_password)
     redis_client.delete(key)
     return {"message": "Password reset successfully"}
+
 
 # ── Unified Login (Student + Vendor) ──────────────────────────────────────────
 @router.post("/login", response_model=schemas.TokenResponse)
@@ -156,14 +177,14 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
             user = vendor.user
             role_type = "vendor"
             display_name = vendor.business_name
-            must_change_pw = vendor.must_change_password  # ✅ From Vendor model
+            must_change_pw = vendor.must_change_password
     else:
         # ── Student path ──
         user = await service.authenticate_user(db, identifier, data.password)
         if user:
             role_type = "student"
             display_name = user.student_profile.name if user.student_profile else "Student"
-            must_change_pw = False  # ✅ Students never forced to change
+            must_change_pw = False
 
     if not user:
         raise HTTPException(
@@ -187,7 +208,8 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
         "must_change_password": must_change_pw
     }
 
-# ── ✅ NEW: Dedicated Vendor Login (Frontend was calling this route) ────────────
+
+# ── Dedicated Vendor Login ─────────────────────────────────────────────────────
 @router.post("/vendor/login", response_model=schemas.TokenResponse)
 async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get_db)):
     phone = str(data.phone).strip()
@@ -217,19 +239,21 @@ async def vendor_login(data: schemas.VendorLogin, db: AsyncSession = Depends(get
         "role": "vendor",
         "user_id": str(vendor.user.id),
         "name": vendor.business_name,
-        "must_change_password": vendor.must_change_password  # ✅ Correct field, correct model
+        "must_change_password": vendor.must_change_password
     }
+
 
 # ── Change Password (unified) ──────────────────────────────────────────────────
 @router.post("/change-password")
 async def change_password(data: schemas.ChangePassword, current_user=Depends(get_current_user_or_vendor), db: AsyncSession = Depends(get_db)):
     if hasattr(current_user, 'user'):  # Vendor object
         current_user.user.hashed_password = utils.hash_password(data.new_password)
-        current_user.must_change_password = False  # ✅ On Vendor model
+        current_user.must_change_password = False
     else:
         current_user.hashed_password = utils.hash_password(data.new_password)
     await db.commit()
     return {"message": "Password updated successfully"}
+
 
 # ── Vendor: Change Password (with old password verification) ──────────────────
 @router.post("/vendor/change-password")
@@ -238,30 +262,44 @@ async def vendor_change_password(data: schemas.VendorChangePassword, current_ven
         raise HTTPException(status_code=400, detail="Invalid old password")
 
     current_vendor.user.hashed_password = utils.hash_password(data.new_password)
-    current_vendor.must_change_password = False  # ✅ On Vendor model
+    current_vendor.must_change_password = False
     await db.commit()
     return {"message": "Password changed successfully"}
 
-# ── Vendor: Forgot Password ────────────────────────────────────────────────────
+
+# ── Vendor: Forgot Password (CHANGED: phone → email) ──────────────────────────
 @router.post("/vendor/forgot-password")
-async def vendor_forgot_password(data: schemas.VendorForgotPassword, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    vendor = await service.get_vendor_by_phone(db, data.phone)
-    msg = "If that phone is registered, an OTP has been sent."
+async def vendor_forgot_password(
+    data: schemas.VendorForgotPassword,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    vendor = await service.get_vendor_by_email(db, data.email)
+    msg = "If that email is registered, an OTP has been sent."
     if vendor:
         try:
-            check_otp_rate_limit(vendor.phone)
+            # Rate-limit by email (unique per vendor via User.email)
+            check_otp_rate_limit(data.email)
             otp = utils.generate_otp()
-            redis_client.set(f"reset_vendor:{vendor.phone}", otp, ex=600)
-            increment_otp_count(vendor.phone)
-            background_tasks.add_task(service.send_otp_email, vendor.phone, vendor.business_name, otp, "reset")
+            # Redis key uses email (was phone before)
+            redis_client.set(f"reset_vendor:{data.email}", otp, ex=600)
+            increment_otp_count(data.email)
+            background_tasks.add_task(
+                service.send_otp_email,
+                vendor.user.email,   # email from User model
+                vendor.business_name,
+                otp,
+                "reset"
+            )
         except HTTPException:
             pass
     return {"message": msg}
 
-# ── Vendor: Reset Password via OTP ────────────────────────────────────────────
+
+# ── Vendor: Reset Password via OTP (CHANGED: phone → email) ───────────────────
 @router.post("/vendor/reset-password")
 async def vendor_reset_password(data: schemas.VendorResetPassword, db: AsyncSession = Depends(get_db)):
-    key = f"reset_vendor:{data.phone}"
+    key = f"reset_vendor:{data.email}"
     stored_otp = redis_client.get(key)
 
     if not stored_otp:
@@ -269,9 +307,10 @@ async def vendor_reset_password(data: schemas.VendorResetPassword, db: AsyncSess
     if str(stored_otp) != str(data.otp):
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
-    await service.reset_vendor_password_otp(db, data.phone, data.new_password)
+    await service.reset_vendor_password_otp(db, data.email, data.new_password)
     redis_client.delete(key)
     return {"message": "Password reset successfully"}
+
 
 # ── Admin: Force Reset Vendor Password ────────────────────────────────────────
 @router.post("/vendor/reset-password/admin", tags=["admin"])
@@ -280,9 +319,10 @@ async def reset_vendor_password(phone: str, new_password: str, db: AsyncSession 
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     vendor.user.hashed_password = utils.hash_password(new_password)
-    vendor.must_change_password = True  # ✅ On Vendor model
+    vendor.must_change_password = True
     await db.commit()
     return {"message": "Vendor password reset by Admin. Vendor forced to change on next login."}
+
 
 # ── Token Refresh ──────────────────────────────────────────────────────────────
 @router.post("/refresh")
@@ -311,10 +351,10 @@ async def refresh_token(data: schemas.RefreshRequest):
     access_token = utils.create_access_token({"sub": user_id, "role": role})
     return {"access_token": access_token}
 
+
 # ── Logout ─────────────────────────────────────────────────────────────────────
 @router.post("/logout")
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(security), current=Depends(get_current_user_or_vendor)):
-    # For vendors delete only THIS device's session, not all sessions
     token = credentials.credentials
     payload = utils.decode_token(token)
     role = payload.get("role")
@@ -322,8 +362,6 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security), 
 
     if role == "vendor":
         keys = redis_client.keys(f"refresh:vendor:{user_id}:*")
-        # We can't match exact token here since we only have the access token
-        # So delete all sessions for this vendor on explicit logout
         for k in (keys or []):
             redis_client.delete(k)
     else:

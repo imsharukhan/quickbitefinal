@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
-
+from app.payments.router import router as payments_router
 from app.database import create_tables
 from app.users.models import User, Student
 from app.vendors.models import Vendor
@@ -189,3 +189,4 @@ app.include_router(menu_router,          prefix="/api/menu",          tags=["men
 app.include_router(orders_router,        prefix="/api/orders",        tags=["orders"])
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(admin_router,         prefix="/api/admin",         tags=["admin"])
+app.include_router(payments_router, prefix="/api/payments", tags=["payments"])

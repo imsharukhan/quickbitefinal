@@ -25,8 +25,8 @@ export const getAuthData = () => {
 
 export const clearAuthData = () => {
   if (typeof window === 'undefined') return;
-  ['qb_token', 'qb_refresh', 'qb_role', 'qb_user_id', 'qb_name', 
-   'qb_must_change', 'qb_email', 'qb_register_number']  // add these two
+  ['qb_token', 'qb_refresh', 'qb_role', 'qb_user_id', 'qb_name',
+   'qb_must_change', 'qb_email', 'qb_register_number']
   .forEach(key => localStorage.removeItem(key));
 };
 
@@ -60,12 +60,14 @@ export const resetPassword = (register_number, otp, new_password) => {
   return api.post('/api/auth/reset-password', { register_number, otp, new_password });
 };
 
-export const vendorForgotPassword = (phone) => {
-  return api.post('/api/auth/vendor/forgot-password', { phone });
+// CHANGED: was vendorForgotPassword(phone) → now vendorForgotPassword(email)
+export const vendorForgotPassword = (email) => {
+  return api.post('/api/auth/vendor/forgot-password', { email });
 };
 
-export const vendorResetPassword = (phone, otp, new_password) => {
-  return api.post('/api/auth/vendor/reset-password', { phone, otp, new_password });
+// CHANGED: was vendorResetPassword(phone, ...) → now vendorResetPassword(email, ...)
+export const vendorResetPassword = (email, otp, new_password) => {
+  return api.post('/api/auth/vendor/reset-password', { email, otp, new_password });
 };
 
 export const vendorLogin = (phone, password) => {
@@ -93,6 +95,7 @@ export const logout = async () => {
 export const refreshToken = (refresh_token) => {
   return api.post('/api/auth/refresh', { refresh_token });
 };
+
 export const getMe = () => {
   return api.get('/api/users/me');
 };

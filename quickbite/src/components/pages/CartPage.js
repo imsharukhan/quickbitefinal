@@ -1,9 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import * as outletService from '@/services/outletService';
 import * as menuService from '@/services/menuService';
+import * as paymentService from '@/services/paymentService';
+import { loadRazorpayScript, openRazorpayCheckout } from '@/utils/razorpay';
 
 const PLATFORM_FEE = 7;
 const PLATFORM_UPI_ID = 'sharukhansharukhan926@oksbi';
@@ -51,97 +53,125 @@ export default function CartPage({ navigate, showToast }) {
     }).finally(() => setSlotsLoading(false));
   }, [cart]);
 
+  const [verifiedOrder, setVerifiedOrder] = useState(null);
+
   const handlePlaceOrder = async () => {
     if (!selectedSlot) { showToast('Please select a pickup time', 'error'); return; }
     if (isSubmittingRef.current) return;
     setLoading(true);
+
     try {
+      // Step 1: Load Razorpay script
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        showToast('Failed to load payment gateway. Please try again.', 'error');
+        return;
+      }
+
+      // Step 2: Create DB order
       const totalWithFee = cartTotal + PLATFORM_FEE;
-      await placeOrder(selectedSlot, totalWithFee);
-      setShowOrderConfirmation(true);
+      const createdOrder = await placeOrder(selectedSlot, totalWithFee);
+      // Note: Make sure AppContext's placeOrder() returns the created order object.
+      // If it doesn't, add `return order` to the placeOrder function in AppContext.
+      const orderId = createdOrder?.id || lastPlacedOrder?.id;
+
+      if (!orderId) {
+        showToast('Order creation failed. Please try again.', 'error');
+        return;
+      }
+
+      // Step 3: Create Razorpay order on backend
+      const rzpData = await paymentService.createPaymentOrder(orderId);
+
+      setLoading(false); // Stop spinner before opening checkout
+
+      // Step 4: Open Razorpay Checkout
+      openRazorpayCheckout({
+        rzpData,
+        orderId,
+        userName: user?.name,
+        userEmail: user?.email,
+
+        // Called by Razorpay after successful payment
+        onSuccess: async (razorpayResponse) => {
+          try {
+            showToast('Verifying payment...', 'info');
+            const verified = await paymentService.verifyPayment({
+              razorpay_order_id: razorpayResponse.razorpay_order_id,
+              razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+              razorpay_signature: razorpayResponse.razorpay_signature,
+              order_id: orderId,
+            });
+            setVerifiedOrder(verified);
+            setShowOrderConfirmation(true);
+            showToast('Payment successful! 🎉', 'success');
+          } catch (err) {
+            // Payment went through but verify failed — WebSocket will notify
+            showToast(
+              'Payment done! Your token will appear in Orders shortly.',
+              'info'
+            );
+            navigate('orders');
+          }
+        },
+
+        // Called if student dismisses modal without paying
+        onDismiss: () => {
+          showToast(
+            'Payment cancelled. Your order is saved — retry from Orders page.',
+            'info'
+          );
+          navigate('orders');
+        },
+      });
+
     } catch (err) {
       showToast(err?.response?.data?.detail || 'Failed to place order', 'error');
-    } finally {
       setLoading(false);
     }
   };
 
   /* ─── ORDER CONFIRMATION SCREEN ─── */
-  if (showOrderConfirmation && lastPlacedOrder) {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
-    // Use displayTotal (items + platform fee) set in AppContext
-    const displayTotal = lastPlacedOrder.displayTotal || lastPlacedOrder.total_price;
-    // GPay deep link
-    const gpayLink = `upi://pay?pa=${PLATFORM_UPI_ID}&pn=${encodeURIComponent('QuickBite')}&am=${displayTotal}&cu=INR&tn=QuickBite%20${lastPlacedOrder.id}%20Token%23${lastPlacedOrder.token_number}`;
+  if (showOrderConfirmation && (verifiedOrder || lastPlacedOrder)) {
+    const orderToShow = verifiedOrder || lastPlacedOrder;
 
     return (
       <div className="qb-cart-page">
         <style>{confirmStyles}</style>
-
         <div className="qb-confirm-wrap">
+
           {/* Token */}
           <div className="qb-token-card">
             <p className="qb-token-label">Your Token Number</p>
             <div className="qb-token-number">
-              #{lastPlacedOrder?.token_number ?? lastPlacedOrder?.id?.toString().slice(-3) ?? '—'}
+              #{orderToShow?.token_number ?? orderToShow?.id?.toString().slice(-3) ?? '—'}
             </div>
             <p className="qb-token-hint">Show this at the counter to collect your order</p>
           </div>
 
           {/* Order summary */}
           <div className="qb-confirm-details">
-            <div className="qb-confirm-row"><span>Order ID</span><strong>{lastPlacedOrder.id}</strong></div>
+            <div className="qb-confirm-row"><span>Order ID</span><strong>{orderToShow.id}</strong></div>
             <div className="qb-confirm-row"><span>Name</span><strong>{user?.name}</strong></div>
             <div className="qb-confirm-row"><span>Reg No.</span><strong>{user?.register_number || '—'}</strong></div>
-            <div className="qb-confirm-row"><span>Outlet</span><strong>{lastPlacedOrder.outletName || 'Campus Outlet'}</strong></div>
-            <div className="qb-confirm-row"><span>Pickup</span><strong>{lastPlacedOrder.pickup_time || lastPlacedOrder.pickupTime}</strong></div>
-            <div className="qb-confirm-row total-row"><span>Total Paid</span><strong>₹{displayTotal}</strong></div>
+            <div className="qb-confirm-row"><span>Outlet</span><strong>{orderToShow.outlet_name || orderToShow.outletName || 'Campus Outlet'}</strong></div>
+            <div className="qb-confirm-row"><span>Pickup</span><strong>{orderToShow.pickup_time || orderToShow.pickupTime}</strong></div>
+            <div className="qb-confirm-row total-row"><span>Total Paid</span><strong>₹{orderToShow.total_price || orderToShow.displayTotal}</strong></div>
           </div>
 
-          {/* Payment */}
+          {/* Payment done — no UPI section needed */}
           <div className="qb-upi-section">
-            <p className="qb-upi-label">Complete your payment</p>
-
-            {isMobile ? (
-              /* Mobile: GPay deep link button */
-              <button
-                className="qb-gpay-btn"
-                onClick={() => { window.location.href = gpayLink; }}
-              >
-                <svg width="22" height="22" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11c-.5 2.5-1.9 4.7-3.9 6.1v5h6.3c3.7-3.4 5.8-8.4 6.2-14.8z" fill="#4285F4"/>
-                  <path d="M24 44c5.4 0 9.9-1.8 13.2-4.8l-6.3-5c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H6.1v5.2C9.4 39.9 16.2 44 24 44z" fill="#34A853"/>
-                  <path d="M12.6 27.7c-.4-1.2-.7-2.4-.7-3.7s.2-2.5.7-3.7v-5.2H6.1C4.8 17.5 4 20.7 4 24s.8 6.5 2.1 8.9l6.5-5.2z" fill="#FBBC05"/>
-                  <path d="M24 12c3 0 5.7 1 7.8 3l5.8-5.8C34 6 29.4 4 24 4 16.2 4 9.4 8.1 6.1 15.1l6.5 5.2C14.2 15.6 18.7 12 24 12z" fill="#EA4335"/>
-                </svg>
-                Pay ₹{displayTotal} via Google Pay
-              </button>
-            ) : (
-              /* Desktop: show UPI ID + copy button */
-              <div className="qb-upi-copy">
-                <div className="qb-upi-id-wrap">
-                  <span className="qb-upi-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                  </span>
-                  <span className="qb-upi-id-text">{PLATFORM_UPI_ID}</span>
-                </div>
-                <button
-                  className="qb-copy-btn"
-                  onClick={() => {
-                    navigator.clipboard.writeText(PLATFORM_UPI_ID);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                >
-                  {copied ? '✓ Copied' : 'Copy UPI ID'}
-                </button>
-              </div>
-            )}
-
-            <p className="qb-upi-note">After payment, vendor will confirm and your order will start being prepared.</p>
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✅</div>
+              <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: '4px' }}>Payment Complete</p>
+              <p className="qb-upi-note">Your payment was successful. The vendor will start preparing your order shortly.</p>
+            </div>
           </div>
 
-          <button className="qb-view-orders-btn" onClick={() => { setShowOrderConfirmation(false); navigate('orders'); }}>
+          <button
+            className="qb-view-orders-btn"
+            onClick={() => { setShowOrderConfirmation(false); navigate('orders'); }}
+          >
             View My Orders
           </button>
         </div>

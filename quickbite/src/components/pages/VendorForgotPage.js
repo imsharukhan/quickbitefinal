@@ -8,9 +8,10 @@ export default function VendorForgotPage({ navigate }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const [phone, setPhone] = useState('');
-  
-  const [otp, setOtp] = useState(['','','','','','']);
+  // CHANGED: phone → email
+  const [email, setEmail] = useState('');
+
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const otpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
   const [timer, setTimer] = useState(0);
 
@@ -25,23 +26,25 @@ export default function VendorForgotPage({ navigate }) {
     return () => clearInterval(interval);
   }, [step, timer]);
 
-  const isValidPhone = /^[0-9]{10}$/.test(phone);
-  
+  // CHANGED: validate email instead of phone
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
   const handleSendOTP = async (e) => {
     e.preventDefault();
-    if (!isValidPhone) return;
+    if (!isValidEmail) return;
     setLoading(true);
     setError('');
     try {
-      await authService.vendorForgotPassword(phone);
-      setSuccess('OTP sent successfully if phone registered.');
+      // CHANGED: pass email
+      await authService.vendorForgotPassword(email);
+      setSuccess('OTP sent to your registered email.');
       setTimeout(() => {
-          setSuccess('');
-          setStep(2);
-          setTimer(60);
+        setSuccess('');
+        setStep(2);
+        setTimer(60);
       }, 1500);
     } catch (err) {
-      setError('Failed to request OTP');
+      setError(err.response?.data?.detail || 'Failed to request OTP');
     } finally {
       setLoading(false);
     }
@@ -59,11 +62,12 @@ export default function VendorForgotPage({ navigate }) {
     setLoading(true);
     setError('');
     try {
-      await authService.vendorResetPassword(phone, otp.join(''), newPassword);
+      // CHANGED: pass email instead of phone
+      await authService.vendorResetPassword(email, otp.join(''), newPassword);
       setSuccess('Password reset successfully!');
       setTimeout(() => navigate('login'), 2000);
     } catch (err) {
-      setError('Failed to reset password. OTP may be expired.');
+      setError(err.response?.data?.detail || 'Failed to reset password. OTP may be expired.');
     } finally {
       setLoading(false);
     }
@@ -72,10 +76,10 @@ export default function VendorForgotPage({ navigate }) {
   const handleResend = async () => {
     setError('');
     try {
-      await authService.vendorForgotPassword(phone);
+      await authService.vendorForgotPassword(email);
       setTimer(60);
     } catch (err) {
-      setError('Failed to resend');
+      setError(err.response?.data?.detail || 'Failed to resend');
     }
   };
 
@@ -95,12 +99,11 @@ export default function VendorForgotPage({ navigate }) {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').substring(0, 6);
     if (!pasted) return;
-    
     const newOtp = [...otp];
     let focusIndex = 0;
     for (let i = 0; i < pasted.length; i++) {
-        newOtp[i] = pasted[i];
-        focusIndex = i;
+      newOtp[i] = pasted[i];
+      focusIndex = i;
     }
     setOtp(newOtp);
     if (focusIndex < 5) otpRefs[focusIndex + 1].current.focus();
@@ -125,15 +128,33 @@ export default function VendorForgotPage({ navigate }) {
         {step === 1 && (
           <>
             <h2 className="auth-title">Vendor Recovery</h2>
-            <p className="auth-subtitle">We'll send an OTP to your phone</p>
+            {/* CHANGED: subtitle now says email */}
+            <p className="auth-subtitle">We'll send an OTP to your registered email</p>
             {error && <div className="error-box">{error}</div>}
             {success && <div className="success-box">{success}</div>}
             <form onSubmit={handleSendOTP}>
+              {/* CHANGED: email input replaces phone input */}
               <div className="form-group">
-                <label className="form-label">Registered Mobile Number</label>
-                <input type="tel" className="form-input" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} required disabled={loading} placeholder="e.g. 9876543210" />
+                <label className="form-label">Registered Email</label>
+                <input
+                  type="email"
+                  className={`form-input ${email && !isValidEmail ? 'error' : ''}`}
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  placeholder="your@email.com"
+                />
+                {email && !isValidEmail && (
+                  <div className="field-error">Please enter a valid email address</div>
+                )}
               </div>
-              <button type="submit" className="btn btn-primary btn-block" disabled={!isValidPhone || loading} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                disabled={!isValidEmail || loading}
+                style={{ width: '100%', display: 'flex', justifyContent: 'center' }}
+              >
                 {loading ? <div className="spinner"></div> : 'Send OTP'}
               </button>
             </form>
@@ -143,19 +164,37 @@ export default function VendorForgotPage({ navigate }) {
         {step === 2 && (
           <>
             <h2 className="auth-title">Verify OTP</h2>
-            <p className="auth-subtitle">Enter the 6-digit code sent</p>
+            <p className="auth-subtitle">Enter the 6-digit code sent to your email</p>
             {error && <div className="error-box">{error}</div>}
             <form onSubmit={handleVerifyOTP}>
               <div className="otp-inputs" onPaste={handleOtpPaste}>
                 {otp.map((d, i) => (
-                  <input key={i} ref={otpRefs[i]} type="text" maxLength={1} className="otp-input" value={d} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} disabled={loading} />
+                  <input
+                    key={i}
+                    ref={otpRefs[i]}
+                    type="text"
+                    maxLength={1}
+                    className="otp-input"
+                    value={d}
+                    onChange={e => handleOtpChange(i, e.target.value)}
+                    onKeyDown={e => handleOtpKeyDown(i, e)}
+                    disabled={loading}
+                  />
                 ))}
               </div>
-              <button type="submit" className="btn btn-primary btn-block" disabled={otp.join('').length !== 6} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                disabled={otp.join('').length !== 6}
+                style={{ width: '100%', display: 'flex', justifyContent: 'center' }}
+              >
                 Verify OTP
               </button>
               <div className="auth-divider">
-                {timer > 0 ? <span className="text-muted">Resend in {timer}s</span> : <button type="button" className="auth-link" onClick={handleResend} disabled={loading}>Resend OTP</button>}
+                {timer > 0
+                  ? <span className="text-muted">Resend in {timer}s</span>
+                  : <button type="button" className="auth-link" onClick={handleResend} disabled={loading}>Resend OTP</button>
+                }
               </div>
             </form>
           </>
@@ -170,14 +209,33 @@ export default function VendorForgotPage({ navigate }) {
             <form onSubmit={handleResetPassword}>
               <div className="form-group">
                 <label className="form-label">New Password</label>
-                <input type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} required disabled={loading} />
+                <input
+                  type="password"
+                  className="form-input"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                />
                 <div className="password-strength" style={{ width: strength.width, backgroundColor: strength.color }}></div>
               </div>
               <div className="form-group">
                 <label className="form-label">Confirm Password</label>
-                <input type="password" className={`form-input ${(confirmPassword && newPassword !== confirmPassword) ? 'error' : ''}`} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={loading} />
+                <input
+                  type="password"
+                  className={`form-input ${confirmPassword && newPassword !== confirmPassword ? 'error' : ''}`}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                />
               </div>
-              <button type="submit" className="btn btn-primary btn-block" disabled={newPassword !== confirmPassword || newPassword.length < 6 || loading} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                disabled={newPassword !== confirmPassword || newPassword.length < 6 || loading}
+                style={{ width: '100%', display: 'flex', justifyContent: 'center' }}
+              >
                 {loading ? <div className="spinner"></div> : 'Reset Password'}
               </button>
             </form>

@@ -8,6 +8,69 @@ import { Clock, RefreshCw } from 'lucide-react';
 
 const PLATFORM_FEE = 7;
 
+function RetryPaymentSection({ order, user, showToast, navigate }) {
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetryPayment = async () => {
+    setRetrying(true);
+    try {
+      const { loadRazorpayScript, openRazorpayCheckout } = await import('@/utils/razorpay');
+      const paymentService = await import('@/services/paymentService');
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) { showToast('Payment gateway failed to load', 'error'); return; }
+
+      const rzpData = await paymentService.createPaymentOrder(order.id);
+
+      openRazorpayCheckout({
+        rzpData,
+        orderId: order.id,
+        userName: user?.name,
+        userEmail: user?.email,
+        onSuccess: async (response) => {
+          try {
+            await paymentService.verifyPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              order_id: order.id,
+            });
+            showToast('Payment confirmed! 🎉', 'success');
+            navigate('orders');
+          } catch {
+            showToast('Payment done! Token will appear shortly.', 'info');
+          }
+        },
+        onDismiss: () => showToast('Payment cancelled.', 'info'),
+      });
+    } catch (err) {
+      showToast('Failed to open payment. Try again.', 'error');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: '16px', background: '#FFF3E0', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid #FFCC80' }}>
+      <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#E65100', fontWeight: 600 }}>
+        ⚠️ Payment pending — complete payment to confirm your order.
+      </p>
+      <button
+        onClick={handleRetryPayment}
+        disabled={retrying}
+        style={{
+          width: '100%', background: '#FC8019', color: 'white',
+          border: 'none', borderRadius: '8px', padding: '12px',
+          fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer',
+          opacity: retrying ? 0.6 : 1
+        }}
+      >
+        {retrying ? 'Opening payment...' : '💳 Complete Payment'}
+      </button>
+    </div>
+  );
+}
+
 export default function OrdersPage({ navigate, showToast }) {
   const { orders, setOrders, loadOrders, isOrdersLoading } = useApp();
   const [ratingState, setRatingState] = useState({ id: null, stars: 5, review: '' });
@@ -162,78 +225,12 @@ export default function OrdersPage({ navigate, showToast }) {
               </div>
 
               {order.payment_status === 'PENDING' && order.status === 'Placed' && (
-                <div style={{ marginTop: '16px', background: '#FFF3E0', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid #FFCC80' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⚠️</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: '#E65100', fontWeight: 600, lineHeight: 1.4 }}>
-                        Please pay ₹{order.total_price} to {order.outlet_upi_id || 'sharukhansharukhan926@oksbi'} to confirm your order.
-                      </p>
-                      
-                      {isMobile ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              window.location.href = generateUpiLink(order);
-                              if (showToast) showToast('Once paid, please wait for the vendor to verify your transaction.', 'info');
-                            }}
-                            style={{
-                              width: '100%', background: '#1A73E8', color: 'white', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px'
-                            }}
-                          >
-                            <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11c-.5 2.5-1.9 4.7-3.9 6.1v5h6.3c3.7-3.4 5.8-8.4 6.2-14.8z" fill="#4285F4"/>
-                              <path d="M24 44c5.4 0 9.9-1.8 13.2-4.8l-6.3-5c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H6.1v5.2C9.4 39.9 16.2 44 24 44z" fill="#34A853"/>
-                              <path d="M12.6 27.7c-.4-1.2-.7-2.4-.7-3.7s.2-2.5.7-3.7v-5.2H6.1C4.8 17.5 4 20.7 4 24s.8 6.5 2.1 8.9l6.5-5.2z" fill="#FBBC05"/>
-                              <path d="M24 12c3 0 5.7 1 7.8 3l5.8-5.8C34 6 29.4 4 24 4 16.2 4 9.4 8.1 6.1 15.1l6.5 5.2C14.2 15.6 18.7 12 24 12z" fill="#EA4335"/>
-                            </svg>
-                            Pay Now via UPI
-                          </button>
-                          <p style={{ margin: 0, fontSize: '0.75rem', color: '#E65100', opacity: 0.9 }}>
-                            *Once paid, please wait for the vendor to verify your transaction.
-                          </p>
-                        </>
-                      ) : (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <code style={{ background: '#FFE0B2', padding: '6px 10px', borderRadius: '6px', fontSize: '0.85rem', color: '#E65100', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
-                            {order.outlet_upi_id || 'sharukhansharukhan926@oksbi'}
-                          </code>
-                          <button 
-                            onClick={() => {
-                              navigator.clipboard.writeText(order.outlet_upi_id || 'sharukhansharukhan926@oksbi');
-                              setCopiedId(order.id);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            style={{
-                              background: '#E65100', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s'
-                            }}
-                          >
-                            {copiedId === order.id ? 'Copied ✓' : 'Copy'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {canCancel && (
-                <button
-                  onClick={() => handleCancel(order.id)}
-                  disabled={cancelingId === order.id}
-                  style={{ width: '100%', marginTop: '16px', padding: '10px', background: '#ffebee', color: '#d84315', border: 'none', borderRadius: 'var(--radius)', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  {cancelingId === order.id ? 'Canceling...' : 'Cancel Order'}
-                </button>
-              )}
-
-              {canRate && ratingState.id !== order.id && (
-                <button
-                  onClick={() => setRatingState({ id: order.id, stars: 5, review: '' })}
-                  className="btn btn-outline" style={{ width: '100%', marginTop: '16px' }}
-                >
-                  Rate Order
-                </button>
+                <RetryPaymentSection
+                  order={order}
+                  user={user}
+                  showToast={showToast}
+                  navigate={navigate}
+                />
               )}
 
               {ratingState.id === order.id && (

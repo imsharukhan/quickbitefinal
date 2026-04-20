@@ -198,35 +198,39 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     order = result.scalars().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-        
+
     result = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
     outlet = result.scalars().first()
     if str(outlet.vendor_id) != str(vendor_id):
         raise HTTPException(status_code=403, detail="Not authorized")
-        
+
     if order.status != "Placed":
         raise HTTPException(status_code=400, detail="Order is not in Placed status")
-    if order.payment_status != "PENDING":
-        raise HTTPException(status_code=400, detail="Order payment is not PENDING")
-        
-    payment_res = PaymentService.verify_upi_payment(order, payment_gateway_id)
-    
-    order.payment_status = PaymentService.get_payment_status_after_confirm()
+
+    if order.payment_status == "COMPLETED":
+        # ✅ Razorpay already verified — vendor just starting to prepare
+        pass
+    elif order.payment_status == "PENDING":
+        # ⚠️ Fallback: vendor manually confirming (webhook may have failed)
+        payment_res = PaymentService.verify_upi_payment(order, payment_gateway_id)
+        order.payment_status = "COMPLETED"
+        order.payment_gateway_id = payment_res["gateway_id"]
+    else:
+        raise HTTPException(status_code=400, detail="Cannot update order in current payment state")
+
     order.payment_confirmed_by_vendor = True
-    order.payment_gateway_id = payment_res["gateway_id"]
     order.status = "Preparing"
     order.updated_at = datetime.utcnow()
-    
-    notification = Notification(
+
+    db.add(Notification(
         user_id=order.user_id,
-        message=f"Payment confirmed for Order #{order.token_number}! Your food is being prepared 🍳",
+        message=f"🍳 Order #{order.token_number} is being prepared!",
         related_order_id=order.id
-    )
-    db.add(notification)
-    
+    ))
+
     await db.commit()
     return await format_order_response(db, order)
-
+    
 async def update_order_status(db: AsyncSession, order_id: str, new_status: str, vendor_id: str):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalars().first()
