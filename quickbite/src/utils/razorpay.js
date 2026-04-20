@@ -23,7 +23,7 @@ export const openRazorpayCheckout = ({
 }) => {
   const options = {
     key: rzpData.key_id,
-    amount: rzpData.amount,       // already in paise from backend
+    amount: rzpData.amount,
     currency: rzpData.currency || 'INR',
     name: 'QuickBite',
     description: `Order #${orderId}`,
@@ -33,13 +33,25 @@ export const openRazorpayCheckout = ({
       email: userEmail || '',
     },
     theme: { color: '#FC8019' },
+    // ── UPI ONLY ──────────────────────────────
+    config: {
+      display: {
+        blocks: {
+          upi: {
+            name: 'Pay via UPI',
+            instruments: [{ method: 'upi' }],
+          },
+        },
+        sequence: ['block.upi'],
+        preferences: { show_default_blocks: false },
+      },
+    },
+    // ─────────────────────────────────────────
     handler: onSuccess,
     modal: {
       ondismiss: onDismiss,
       escape: false,
       backdropclose: false,
     },
-  };
-  const rzp = new window.Razorpay(options);
-  rzp.open();
+};
 };

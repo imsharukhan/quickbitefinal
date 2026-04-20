@@ -169,17 +169,27 @@ export default function OrdersPage({ navigate, showToast }) {
 
               {/* Token banner for active orders */}
               {['Placed', 'Preparing', 'Ready for Pickup'].includes(order.status) ? (
-                <div style={{ background: 'var(--primary)', color: 'white', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>YOUR TOKEN</div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 900, lineHeight: 1 }}>
-                      #{order.token_number || order.id?.toString().slice(-3) || '---'}
+                order.token_valid_today ? (
+                  <div style={{ background: 'var(--primary)', color: 'white', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>YOUR TOKEN</div>
+                      <div style={{ fontSize: '2.5rem', fontWeight: 900, lineHeight: 1 }}>
+                        #{order.token_number || order.id?.toString().slice(-3) || '---'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.85 }}>
+                      Show this at<br />the counter
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.85 }}>
-                    Show this at<br />the counter
+                ) : (
+                  <div style={{ background: '#FFF3E0', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '1.4rem' }}>⏰</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#E65100' }}>Token Expired</div>
+                      <div style={{ fontSize: '0.75rem', color: '#BF360C', marginTop: '2px' }}>This token was for a previous day and is no longer valid</div>
+                    </div>
                   </div>
-                </div>
+                )
               ) : (
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '12px' }}>
                   Token #{order.token_number || order.id?.toString().slice(-3) || '---'}

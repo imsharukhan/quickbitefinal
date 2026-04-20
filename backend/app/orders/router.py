@@ -172,6 +172,18 @@ async def get_outlet_stats(
         raise HTTPException(status_code=403, detail="Not authorized")
     return await service.get_outlet_stats(db, outlet_id)
 
+@router.get("/outlet/{outlet_id}/history")
+async def get_outlet_history(
+    outlet_id: str,
+    current_vendor = Depends(get_current_vendor),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.outlets.service import validate_vendor_owns_outlet
+    owns = await validate_vendor_owns_outlet(db, str(current_vendor.id), outlet_id)
+    if not owns:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return await service.get_outlet_history(db, outlet_id)    
+
 @router.websocket("/ws/student/{user_id}")
 async def student_websocket(websocket: WebSocket, user_id: str, token: str = Query(...)):
     try:

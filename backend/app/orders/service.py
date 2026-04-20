@@ -31,6 +31,11 @@ async def get_daily_token(db: AsyncSession, outlet_id: str) -> int:
         )
     )
     count = result.scalar()
+    if count >= 20:
+        raise HTTPException(
+            status_code=400,
+            detail="This canteen has reached its order limit for today (20 orders). Please try again tomorrow."
+        )
     return count + 1
 
 def generate_idempotency_key(user_id: str, outlet_id: str, pickup_time: str, items: list) -> str:
@@ -136,6 +141,10 @@ async def format_order_response(db: AsyncSession, order: Order) -> dict:
     result = await db.execute(select(Rating).where(Rating.order_id == order.id))
     rating = result.scalars().first()
     
+    today_ist_date = datetime.now(IST).date()
+    placed_ist_date = order.placed_at.replace(tzinfo=pytz.UTC).astimezone(IST).date()
+    token_valid_today = placed_ist_date == today_ist_date
+
     return {
         "id": order.id,
         "outlet_id": outlet.id,
@@ -157,7 +166,8 @@ async def format_order_response(db: AsyncSession, order: Order) -> dict:
         "items": items,
         "upi_deep_link": get_upi_deep_link(outlet, order),
         "can_cancel": order.status == "Placed" and order.payment_status == "PENDING",
-        "can_rate": order.status == "Picked Up" and rating is None
+        "can_rate": order.status == "Picked Up" and rating is None,
+        "token_valid_today": token_valid_today,  # ← NEW
     }
 
 async def get_orders_by_user(db: AsyncSession, user_id: str) -> list:
@@ -230,7 +240,7 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
 
     await db.commit()
     return await format_order_response(db, order)
-    
+
 async def update_order_status(db: AsyncSession, order_id: str, new_status: str, vendor_id: str):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalars().first()
@@ -396,3 +406,44 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
         "total_revenue": total_revenue,
         "pending_payment_count": pending_payment_count
     }
+async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
+    today_ist = datetime.now(IST).date()
+    result = []
+    for i in range(30):
+        target_date = today_ist - timedelta(days=i)
+        start = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
+        end = start + timedelta(days=1)
+        start_utc = start.astimezone(pytz.UTC).replace(tzinfo=None)
+        end_utc = end.astimezone(pytz.UTC).replace(tzinfo=None)
+
+        count_res = await db.execute(
+            select(func.count(Order.id)).where(
+                Order.outlet_id == outlet_id,
+                Order.placed_at >= start_utc,
+                Order.placed_at < end_utc
+            )
+        )
+        revenue_res = await db.execute(
+            select(func.sum(Order.total_price)).where(
+                Order.outlet_id == outlet_id,
+                Order.status.in_(["Preparing", "Ready for Pickup", "Picked Up"]),
+                Order.placed_at >= start_utc,
+                Order.placed_at < end_utc
+            )
+        )
+        completed_res = await db.execute(
+            select(func.count(Order.id)).where(
+                Order.outlet_id == outlet_id,
+                Order.status == "Picked Up",
+                Order.placed_at >= start_utc,
+                Order.placed_at < end_utc
+            )
+        )
+        result.append({
+            "date": str(target_date),
+            "label": "Today" if i == 0 else target_date.strftime("%d %b %Y"),
+            "order_count": count_res.scalar() or 0,
+            "completed_count": completed_res.scalar() or 0,
+            "revenue": float(revenue_res.scalar() or 0.0),
+        })
+    return result

@@ -45,7 +45,11 @@ export default function VendorDashboard({ showToast }) {
     const [showAddItem, setShowAddItem] = useState(false);
     const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
     const [outletForm, setOutletForm] = useState({ upi_id: '', opening_time: '', closing_time: '' });
- 
+    const [historyData, setHistoryData] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [expandedDate, setExpandedDate] = useState(null);
+    const [expandedOrders, setExpandedOrders] = useState([]);
+    const [expandedLoading, setExpandedLoading] = useState(false);
     const { lastMessage } = useWebSocket('vendor', user?.id);
  
     const loadOutlets = () => {
@@ -286,11 +290,21 @@ export default function VendorDashboard({ showToast }) {
  
             {/* Tabs */}
             <div className="dashboard-tabs">
-                {['orders', 'menu', 'outlet', 'profile'].map(tab => (
+                {['orders', 'history', 'menu', 'outlet', 'profile'].map(tab => (
                     <div key={tab} className={`dashboard-tab ${activeTab === tab ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab)}
+                        onClick={async () => {
+                            setActiveTab(tab);
+                            if (tab === 'history' && selectedOutlet && historyData.length === 0) {
+                                setHistoryLoading(true);
+                                try {
+                                    const data = await orderSvc.getOutletHistory(selectedOutlet.id);
+                                    setHistoryData(data);
+                                } catch (e) { showToast('Failed to load history', 'error'); }
+                                finally { setHistoryLoading(false); }
+                            }
+                        }}
                         style={{ textTransform: 'capitalize', flex: 1, textAlign: 'center' }}>
-                        {tab === 'orders' ? '📋' : tab === 'menu' ? '🍽️' : tab === 'outlet' ? '🏪' : '👤'}
+                        {tab === 'orders' ? '📋' : tab === 'history' ? '📅' : tab === 'menu' ? '🍽️' : tab === 'outlet' ? '🏪' : '👤'}
                     </div>
                 ))}
             </div>
@@ -411,6 +425,139 @@ export default function VendorDashboard({ showToast }) {
                         </div>
                     )}
                 </>
+            ) : activeTab === 'history' ? (
+                <div>
+                    <div style={{ marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '4px' }}>Order History</h2>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Last 30 days — click any date to see orders</p>
+                    </div>
+
+                    {historyLoading ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {[1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: '64px', borderRadius: 'var(--radius)' }} />)}
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {historyData.map((day, idx) => (
+                                <div key={day.date} style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)', overflow: 'hidden', background: 'var(--bg-white)' }}>
+                                    {/* Date row */}
+                                    <div
+                                        onClick={async () => {
+                                            if (expandedDate === day.date) {
+                                                setExpandedDate(null);
+                                                setExpandedOrders([]);
+                                                return;
+                                            }
+                                            setExpandedDate(day.date);
+                                            setExpandedOrders([]);
+                                            setExpandedLoading(true);
+                                            try {
+                                                const orders = await orderSvc.getOutletOrders(selectedOutlet.id, null, day.date);
+                                                setExpandedOrders(orders);
+                                            } catch { showToast('Failed to load orders', 'error'); }
+                                            finally { setExpandedLoading(false); }
+                                        }}
+                                        style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{
+                                                width: '40px', height: '40px', borderRadius: 'var(--radius)',
+                                                background: idx === 0 ? 'var(--primary-bg)' : 'var(--bg)',
+                                                border: `1px solid ${idx === 0 ? 'var(--primary)' : 'var(--border)'}`,
+                                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                                flexShrink: 0,
+                                            }}>
+                                                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: idx === 0 ? 'var(--primary)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                                    {idx === 0 ? 'Today' : new Date(day.date + 'T00:00:00').toLocaleDateString('en-IN', { month: 'short' })}
+                                                </span>
+                                                <span style={{ fontSize: '1rem', fontWeight: 900, color: idx === 0 ? 'var(--primary)' : 'var(--text)', lineHeight: 1 }}>
+                                                    {new Date(day.date + 'T00:00:00').getDate()}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                                                    {idx === 0 ? 'Today' : new Date(day.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                    {day.order_count === 0 ? 'No orders' : `${day.order_count} order${day.order_count !== 1 ? 's' : ''} • ${day.completed_count} completed`}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            {day.order_count > 0 && (
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--green)' }}>₹{day.revenue.toFixed(0)}</div>
+                                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>revenue</div>
+                                                </div>
+                                            )}
+                                            <span style={{
+                                                fontSize: '1rem', color: 'var(--text-muted)',
+                                                transform: expandedDate === day.date ? 'rotate(90deg)' : 'rotate(0deg)',
+                                                transition: 'transform 0.2s', display: 'inline-block'
+                                            }}>›</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded orders */}
+                                    {expandedDate === day.date && (
+                                        <div style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg)' }}>
+                                            {expandedLoading ? (
+                                                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                                    Loading orders...
+                                                </div>
+                                            ) : expandedOrders.length === 0 ? (
+                                                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                                    No orders on this day
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                                    {expandedOrders.map(order => (
+                                                        <div key={order.id} style={{ background: 'var(--bg-white)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                            {/* Token badge */}
+                                                            <div style={{
+                                                                width: '44px', height: '44px', borderRadius: 'var(--radius)',
+                                                                background: order.status === 'Picked Up' ? 'var(--green-bg)' : order.status === 'Cancelled' ? 'var(--red-bg)' : 'var(--primary-bg)',
+                                                                border: `1.5px solid ${order.status === 'Picked Up' ? 'var(--green)' : order.status === 'Cancelled' ? 'var(--red)' : 'var(--primary)'}`,
+                                                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                            }}>
+                                                                <div style={{ fontSize: '0.45rem', fontWeight: 700, textTransform: 'uppercase', color: order.status === 'Picked Up' ? 'var(--green)' : order.status === 'Cancelled' ? 'var(--red)' : 'var(--primary)' }}>Token</div>
+                                                                <div style={{ fontSize: '1.2rem', fontWeight: 900, lineHeight: 1, color: order.status === 'Picked Up' ? 'var(--green)' : order.status === 'Cancelled' ? 'var(--red)' : 'var(--primary)' }}>
+                                                                    #{order.token_number}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                    {order.student_name}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                                                    {order.items?.length} item(s) • ⏰ {order.pickup_time}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>₹{order.total_price}</div>
+                                                                <div style={{
+                                                                    fontSize: '0.65rem', fontWeight: 700, marginTop: '2px',
+                                                                    color: order.status === 'Picked Up' ? 'var(--green)' : order.status === 'Cancelled' ? 'var(--red)' : 'var(--text-muted)'
+                                                                }}>
+                                                                    {order.status === 'Picked Up' ? '✓ Done' : order.status === 'Cancelled' ? '✗ Cancelled' : order.status}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {/* Day summary footer */}
+                                                    <div style={{ padding: '10px 16px', background: 'var(--bg)', display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                                                        <span>{expandedOrders.length} total • {expandedOrders.filter(o => o.status === 'Picked Up').length} completed • {expandedOrders.filter(o => o.status === 'Cancelled').length} cancelled</span>
+                                                        <span style={{ color: 'var(--green)' }}>₹{day.revenue.toFixed(0)} earned</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>    
             ) : activeTab === 'menu' ? (
                 <div>
                     <button onClick={() => setShowAddItem(!showAddItem)}
