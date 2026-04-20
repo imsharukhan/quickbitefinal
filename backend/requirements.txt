@@ -18,3 +18,4 @@ websockets==12.0
 psycopg2-binary
 pytz
 upstash-redis
+razorpay
