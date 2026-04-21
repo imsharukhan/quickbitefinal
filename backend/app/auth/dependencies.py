@@ -42,6 +42,17 @@ async def get_current_vendor(credentials: HTTPAuthorizationCredentials = Depends
     if not vendor_id or role != "vendor" or token_type != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid vendor token")
 
+    # ── Validate UUID format before hitting DB ─────────────────────────
+    import uuid
+    try:
+        uuid.UUID(str(vendor_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again."
+        )
+    # ──────────────────────────────────────────────────────────────────
+
     from sqlalchemy.orm import selectinload
     result = await db.execute(select(Vendor).where(Vendor.user_id == vendor_id).options(selectinload(Vendor.user)))
     vendor = result.scalars().first()
