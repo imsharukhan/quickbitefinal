@@ -22,9 +22,19 @@ export default function CartPage({ navigate, showToast }) {
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useEffect(() => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 && !isProcessingPayment) {
+      return (
+        <div className="empty-state">
+          <div className="empty-icon">🛒</div>
+          <h3>Your cart is empty</h3>
+          <p>Looks like you haven't added anything yet.</p>
+          <button className="btn btn-primary" onClick={() => navigate('home')} style={{ marginTop: '16px' }}>Browse Food</button>
+        </div>
+      );
+    }
     const outlet_id = cart[0].outletId;
     setSlotsLoading(true);
     Promise.all([
@@ -59,40 +69,35 @@ export default function CartPage({ navigate, showToast }) {
     if (!selectedSlot) { showToast('Please select a pickup time', 'error'); return; }
     if (isSubmittingRef.current) return;
     setLoading(true);
+    setIsProcessingPayment(true); // ← prevent empty cart flash
 
     try {
-      // Step 1: Load Razorpay script
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         showToast('Failed to load payment gateway. Please try again.', 'error');
+        setIsProcessingPayment(false);
         return;
       }
 
-      // Step 2: Create DB order
       const totalWithFee = cartTotal + PLATFORM_FEE;
       const createdOrder = await placeOrder(selectedSlot, totalWithFee);
-      // Note: Make sure AppContext's placeOrder() returns the created order object.
-      // If it doesn't, add `return order` to the placeOrder function in AppContext.
       const orderId = createdOrder?.id || lastPlacedOrder?.id;
 
       if (!orderId) {
         showToast('Order creation failed. Please try again.', 'error');
+        setIsProcessingPayment(false);
         return;
       }
 
-      // Step 3: Create Razorpay order on backend
       const rzpData = await paymentService.createPaymentOrder(orderId);
+      setLoading(false);
 
-      setLoading(false); // Stop spinner before opening checkout
-
-      // Step 4: Open Razorpay Checkout
       openRazorpayCheckout({
         rzpData,
         orderId,
         userName: user?.name,
         userEmail: user?.email,
 
-        // Called by Razorpay after successful payment
         onSuccess: async (razorpayResponse) => {
           try {
             showToast('Verifying payment...', 'info');
@@ -104,29 +109,25 @@ export default function CartPage({ navigate, showToast }) {
             });
             setVerifiedOrder(verified);
             setShowOrderConfirmation(true);
+            setIsProcessingPayment(false);
             showToast('Payment successful! 🎉', 'success');
           } catch (err) {
-            // Payment went through but verify failed — WebSocket will notify
-            showToast(
-              'Payment done! Your token will appear in Orders shortly.',
-              'info'
-            );
+            setIsProcessingPayment(false);
+            showToast('Payment done! Your token will appear in Orders shortly.', 'info');
             navigate('orders');
           }
         },
 
-        // Called if student dismisses modal without paying
         onDismiss: () => {
-          showToast(
-            'Payment cancelled. Your order is saved — retry from Orders page.',
-            'info'
-          );
-          navigate('orders');
+          setIsProcessingPayment(false);
+          showToast('Payment cancelled. Your order is saved — retry from Orders page.', 'info');
+          navigate('orders'); // ← redirect to orders so they can retry
         },
       });
 
     } catch (err) {
       showToast(err?.response?.data?.detail || 'Failed to place order', 'error');
+      setIsProcessingPayment(false);
       setLoading(false);
     }
   };
