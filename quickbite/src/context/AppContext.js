@@ -21,6 +21,7 @@ export function AppProvider({ children }) {
     const [isOrdersLoading, setIsOrdersLoading] = useState(false);
     const [isNotifsLoading, setIsNotifsLoading] = useState(false);
     const isSubmittingRef = useRef(false);
+    const hasInitialized = useRef(false);
 
     useEffect(() => {
         try {
@@ -76,19 +77,33 @@ export function AppProvider({ children }) {
         }
     }, []);
 
+    // On mount — load immediately from localStorage token without waiting for AuthContext
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const token = localStorage.getItem('qb_token');
+        const role = localStorage.getItem('qb_role');
+        if (token && token !== 'null' && token !== 'undefined' && role !== 'vendor') {
+            loadOrders();
+            loadNotifications();
+        }
+    }, []); // runs once on mount — fixes refresh empty state
+
     useEffect(() => {
         if (isLoggedIn) {
+            hasInitialized.current = true;
             const role = localStorage.getItem('qb_role');
             if (role !== 'vendor') {
                 loadOrders();
                 loadNotifications();
             }
-        } else {
+        } else if (hasInitialized.current) {
+            // Only clear on REAL logout — not on initial render flash
             setOrders([]);
             setNotifications([]);
             setCart([]);
             setUpiDeepLink('');
             setLastPlacedOrder(null);
+            hasInitialized.current = false;
         }
     }, [isLoggedIn]);
 
