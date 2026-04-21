@@ -153,9 +153,23 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            print("✅ Column check: must_change_password is present.")
+            print("✅ Tables created/verified.")
     except Exception as e:
         print(f"❌ Migration Error: {e}")
+
+    # ── Safe column migrations — run every startup, IF NOT EXISTS is safe ──
+    migrations = [
+        "ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100)",
+        "ALTER TABLE outlets ADD COLUMN IF NOT EXISTS razorpay_account_id VARCHAR(100)",
+    ]
+    try:
+        from sqlalchemy import text
+        async with engine.begin() as conn:
+            for sql in migrations:
+                await conn.execute(text(sql))
+        print("✅ Column migrations applied.")
+    except Exception as e:
+        print(f"❌ Column migration error: {e}")
 
     
     # ── Step 3: Seed vendor accounts ──────────────────────────────────
