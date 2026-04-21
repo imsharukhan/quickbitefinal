@@ -131,19 +131,31 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
 async def format_order_response(db: AsyncSession, order: Order) -> dict:
     result = await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
     items = result.scalars().all()
-    
+
     result = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
     outlet = result.scalars().first()
-    
+
     result = await db.execute(select(User).where(User.id == order.user_id))
     user = result.scalars().first()
-    
+
+    # ── Fetch student profile for name + register number ──────────────
+    from app.users.models import Student
+    student = None
+    if user:
+        result = await db.execute(select(Student).where(Student.user_id == user.id))
+        student = result.scalars().first()
+    # ──────────────────────────────────────────────────────────────────
+
     result = await db.execute(select(Rating).where(Rating.order_id == order.id))
     rating = result.scalars().first()
-    
+
+    # ── Token validity: only valid if placed today IST ─────────────────
     today_ist_date = datetime.now(IST).date()
-    placed_ist_date = order.placed_at.replace(tzinfo=pytz.UTC).astimezone(IST).date()
+    placed_naive = order.placed_at
+    placed_utc = placed_naive.replace(tzinfo=pytz.UTC) if placed_naive.tzinfo is None else placed_naive
+    placed_ist_date = placed_utc.astimezone(IST).date()
     token_valid_today = placed_ist_date == today_ist_date
+    # ──────────────────────────────────────────────────────────────────
 
     return {
         "id": order.id,
@@ -151,8 +163,8 @@ async def format_order_response(db: AsyncSession, order: Order) -> dict:
         "outlet_name": outlet.name,
         "outlet_upi_id": outlet.upi_id,
         "user_id": user.id,
-        "student_name": user.name,
-        "student_register_number": user.register_number,
+        "student_name": student.name if student else "Unknown",
+        "student_register_number": student.register_no if student else "—",
         "status": order.status,
         "payment_status": order.payment_status,
         "payment_confirmed_by_vendor": order.payment_confirmed_by_vendor,
@@ -167,9 +179,8 @@ async def format_order_response(db: AsyncSession, order: Order) -> dict:
         "upi_deep_link": get_upi_deep_link(outlet, order),
         "can_cancel": order.status == "Placed" and order.payment_status == "PENDING",
         "can_rate": order.status == "Picked Up" and rating is None,
-        "token_valid_today": token_valid_today,  # ← NEW
+        "token_valid_today": token_valid_today,
     }
-
 async def get_orders_by_user(db: AsyncSession, user_id: str) -> list:
     result = await db.execute(select(Order).where(Order.user_id == user_id).order_by(Order.placed_at.desc()))
     orders = result.scalars().all()
