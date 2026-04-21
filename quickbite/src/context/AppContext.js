@@ -160,7 +160,7 @@ export function AppProvider({ children }) {
             setUpiDeepLink(deepLink);
             // Store grandTotal on the order object for display
             setLastPlacedOrder({ ...response, displayTotal: total_price });
-            clearCart();
+            // Cart cleared only after payment succeeds — see CartPage onSuccess
             // Don't load orders here — payment hasn't happened yet
             // Orders will load after payment verify succeeds
             return response;

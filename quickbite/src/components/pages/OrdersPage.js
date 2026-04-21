@@ -8,79 +8,9 @@ import { Clock, RefreshCw } from 'lucide-react';
 
 const PLATFORM_FEE = 7;
 
-function RetryPaymentSection({ order, user, showToast, navigate, refreshAfterPayment }) {
-  const [retrying, setRetrying] = useState(false);
-
-  const handleRetryPayment = async () => {
-    if (retrying) return;
-    setRetrying(true);
-    try {
-      const { loadRazorpayScript, openRazorpayCheckout } = await import('@/utils/razorpay');
-      const paymentService = await import('@/services/paymentService');
-
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        showToast('Payment gateway failed to load. Please try again.', 'error');
-        setRetrying(false);
-        return;
-      }
-
-      const rzpData = await paymentService.createPaymentOrder(order.id);
-
-      setRetrying(false); // Reset before opening modal
-
-      openRazorpayCheckout({
-        rzpData,
-        orderId: order.id,
-        userName: user?.name,
-        userEmail: user?.email,
-        onSuccess: async (response) => {
-          try {
-            showToast('Verifying payment...', 'info');
-            await paymentService.verifyPayment({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              order_id: order.id,
-            });
-            showToast('Payment confirmed! 🎉', 'success');
-            if (refreshAfterPayment) await refreshAfterPayment();
-          } catch {
-            showToast('Payment done! Refreshing orders...', 'info');
-            if (refreshAfterPayment) await refreshAfterPayment();
-          }
-        },
-        onDismiss: () => showToast('Payment cancelled. You can retry anytime.', 'info'),
-      });
-    } catch (err) {
-      showToast('Failed to open payment. Please try again.', 'error');
-      setRetrying(false);
-    }
-  };
-
-  return (
-    <div style={{ marginTop: '16px', background: '#FFF3E0', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid #FFCC80' }}>
-      <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#E65100', fontWeight: 600 }}>
-        ⚠️ Payment pending — complete payment to confirm your order.
-      </p>
-      <button
-        onClick={handleRetryPayment}
-        disabled={retrying}
-        style={{
-          width: '100%', background: '#FC8019', color: 'white',
-          border: 'none', borderRadius: '8px', padding: '12px',
-          fontSize: '0.95rem', fontWeight: 700, cursor: retrying ? 'not-allowed' : 'pointer',
-          opacity: retrying ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-        }}
-      >
-        {retrying ? <><span className="qb-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> Opening...</> : '💳 Complete Payment'}
-      </button>
-    </div>
-  );
-}
-
 export default function OrdersPage({ navigate, showToast }) {
   const { orders, setOrders, loadOrders, isOrdersLoading, refreshAfterPayment } = useApp();
+  const visibleOrders = orders.filter(o => o.payment_status !== 'PENDING');
   const [ratingState, setRatingState] = useState({ id: null, stars: 5, review: '' });
   const [cancelingId, setCancelingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -138,7 +68,7 @@ export default function OrdersPage({ navigate, showToast }) {
     }
   };
 
-  if (isOrdersLoading && orders.length === 0) {
+  if (isOrdersLoading && visibleOrders.length === 0) {
     return (
       <div className="empty-state" style={{ height: '100vh' }}>
         <div className="spinner" style={{ width: '40px', height: '40px', borderWidth: '4px', borderColor: 'var(--primary-light)', borderTopColor: 'var(--primary)' }}></div>
@@ -146,7 +76,7 @@ export default function OrdersPage({ navigate, showToast }) {
     );
   }
 
-  if (orders.length === 0) {
+  if (visibleOrders.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">🧾</div>
@@ -167,7 +97,7 @@ export default function OrdersPage({ navigate, showToast }) {
       </div>
 
       <div className="orders-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {orders.map(order => {
+        {visibleOrders.map(order => {
           const isPlaced = order.status === 'Placed';
           const placedDate2 = new Date(order.placed_at?.endsWith('Z') ? order.placed_at : order.placed_at + 'Z');
           const nowIST2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
@@ -209,7 +139,7 @@ export default function OrdersPage({ navigate, showToast }) {
                   );
                 }
 
-                if (['Placed', 'Preparing', 'Ready for Pickup'].includes(order.status)) {
+                if (['Placed', 'Preparing', 'Ready for Pickup'].includes(order.status) && order.payment_status === 'COMPLETED') {
                   return (
                     <div style={{
                       background: 'var(--primary)', color: 'white',
@@ -274,16 +204,6 @@ export default function OrdersPage({ navigate, showToast }) {
                   <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>₹{order.total_price}</span>
                 </div>
               </div>
-
-              {order.payment_status === 'PENDING' && order.status === 'Placed' && isTodayOrder && (
-                <RetryPaymentSection
-                  order={order}
-                  user={user}
-                  showToast={showToast}
-                  navigate={navigate}
-                  refreshAfterPayment={refreshAfterPayment}
-                />
-              )}
 
               {ratingState.id === order.id && (
                 <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg)', borderRadius: 'var(--radius)' }}>

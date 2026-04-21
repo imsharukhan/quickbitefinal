@@ -12,7 +12,7 @@ const isMobileBrowser = () => typeof navigator !== 'undefined' && /Android|webOS
 const PLATFORM_UPI_ID = 'sharukhansharukhan926@oksbi';
 
 export default function CartPage({ navigate, showToast }) {
-  const { cart, removeFromCart, updateCartQuantity, cartTotal, placeOrder, upiDeepLink, lastPlacedOrder, isSubmittingRef, refreshAfterPayment } = useApp();
+  const { cart, removeFromCart, updateCartQuantity, cartTotal, placeOrder, clearCart, isSubmittingRef, refreshAfterPayment } = useApp();
   const { user } = useAuth();
 
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -21,10 +21,7 @@ export default function CartPage({ navigate, showToast }) {
   const [outletClosed, setOutletClosed] = useState(false);
   const [closedMessage, setClosedMessage] = useState('');
   const [slotsLoading, setSlotsLoading] = useState(true);
-  const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-
+  const [paymentLoading, setPaymentLoading] = useState(false);
   useEffect(() => {
     if (cart.length === 0) return;
     const outlet_id = cart[0].outletId;
@@ -55,29 +52,29 @@ export default function CartPage({ navigate, showToast }) {
     }).finally(() => setSlotsLoading(false));
   }, [cart]);
 
-  const [verifiedOrder, setVerifiedOrder] = useState(null);
-
   const handlePlaceOrder = async () => {
     if (!selectedSlot) { showToast('Please select a pickup time', 'error'); return; }
     if (isSubmittingRef.current) return;
     setLoading(true);
-    setIsProcessingPayment(true); // ← prevent empty cart flash
+    setPaymentLoading(true);
 
     try {
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         showToast('Failed to load payment gateway. Please try again.', 'error');
-        setIsProcessingPayment(false);
+        setLoading(false);
+        setPaymentLoading(false);
         return;
       }
 
       const totalWithFee = cartTotal + PLATFORM_FEE;
       const createdOrder = await placeOrder(selectedSlot, totalWithFee);
-      const orderId = createdOrder?.id || lastPlacedOrder?.id;
+      const orderId = createdOrder?.id;
 
       if (!orderId) {
         showToast('Order creation failed. Please try again.', 'error');
-        setIsProcessingPayment(false);
+        setLoading(false);
+        setPaymentLoading(false);
         return;
       }
 
@@ -87,94 +84,49 @@ export default function CartPage({ navigate, showToast }) {
       openRazorpayCheckout({
         rzpData,
         orderId,
-        userName: user?.name,
-        userEmail: user?.email,
+        userName: user?.student_profile?.name || user?.name || '',
+        userEmail: user?.email || '',
 
         onSuccess: async (razorpayResponse) => {
           try {
             showToast('Verifying payment...', 'info');
-            const verified = await paymentService.verifyPayment({
+            await paymentService.verifyPayment({
               razorpay_order_id: razorpayResponse.razorpay_order_id,
               razorpay_payment_id: razorpayResponse.razorpay_payment_id,
               razorpay_signature: razorpayResponse.razorpay_signature,
               order_id: orderId,
             });
-            setVerifiedOrder(verified);
-              setShowOrderConfirmation(true);
-              setIsProcessingPayment(false);
-              showToast('Payment successful! 🎉', 'success');
-              await refreshAfterPayment();
+            clearCart();
+            showToast('Payment successful! 🎉', 'success');
+            await refreshAfterPayment();
+            setPaymentLoading(false);
+            navigate('orders');
           } catch (err) {
-            setIsProcessingPayment(false);
-            showToast('Payment done! Your token will appear in Orders shortly.', 'info');
+            // Verify failed but Razorpay confirmed — webhook will mark it COMPLETED
+            clearCart();
+            showToast('Payment received! Your order will appear in Orders shortly.', 'info');
+            setPaymentLoading(false);
             navigate('orders');
           }
         },
 
         onDismiss: () => {
-          setIsProcessingPayment(false);
-          showToast('Payment cancelled. Your order is saved — retry from Orders page.', 'info');
-          navigate('orders'); // ← redirect to orders so they can retry
+          // User closed Razorpay without paying — stay on cart
+          setLoading(false);
+          setPaymentLoading(false);
+          showToast('Payment cancelled. Tap "Place Order" to try again.', 'info');
         },
       });
 
     } catch (err) {
       showToast(err?.response?.data?.detail || 'Failed to place order', 'error');
-      setIsProcessingPayment(false);
       setLoading(false);
+      setPaymentLoading(false);
     }
   };
 
-  /* ─── ORDER CONFIRMATION SCREEN ─── */
-  if (showOrderConfirmation && (verifiedOrder || lastPlacedOrder)) {
-    const orderToShow = verifiedOrder || lastPlacedOrder;
-
-    return (
-      <div className="qb-cart-page">
-        <style>{confirmStyles}</style>
-        <div className="qb-confirm-wrap">
-
-          {/* Token */}
-          <div className="qb-token-card">
-            <p className="qb-token-label">Your Token Number</p>
-            <div className="qb-token-number">
-              #{orderToShow?.token_number ?? orderToShow?.id?.toString().slice(-3) ?? '—'}
-            </div>
-            <p className="qb-token-hint">Show this at the counter to collect your order</p>
-          </div>
-
-          {/* Order summary */}
-          <div className="qb-confirm-details">
-            <div className="qb-confirm-row"><span>Order ID</span><strong>{orderToShow.id}</strong></div>
-            <div className="qb-confirm-row"><span>Name</span><strong>{user?.name}</strong></div>
-            <div className="qb-confirm-row"><span>Reg No.</span><strong>{user?.register_number || '—'}</strong></div>
-            <div className="qb-confirm-row"><span>Outlet</span><strong>{orderToShow.outlet_name || orderToShow.outletName || 'Campus Outlet'}</strong></div>
-            <div className="qb-confirm-row"><span>Pickup</span><strong>{orderToShow.pickup_time || orderToShow.pickupTime}</strong></div>
-            <div className="qb-confirm-row total-row"><span>Total Paid</span><strong>₹{orderToShow.total_price || orderToShow.displayTotal}</strong></div>
-          </div>
-
-          {/* Payment done — no UPI section needed */}
-          <div className="qb-upi-section">
-            <div style={{ textAlign: 'center', padding: '8px 0' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✅</div>
-              <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: '4px' }}>Payment Complete</p>
-              <p className="qb-upi-note">Your payment was successful. The vendor will start preparing your order shortly.</p>
-            </div>
-          </div>
-
-          <button
-            className="qb-view-orders-btn"
-            onClick={() => { setShowOrderConfirmation(false); navigate('orders'); }}
-          >
-            View My Orders
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   /* ─── EMPTY CART ─── */
-  if (cart.length === 0 && !isProcessingPayment) {
+  if (cart.length === 0 && !paymentLoading) {
     return (
       <div className="empty-state">
         <div className="empty-icon">🛒</div>
@@ -489,78 +441,4 @@ const cartStyles = `
   border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-`;
-
-const confirmStyles = `
-.qb-cart-page {
-  max-width: 480px; margin: 0 auto; padding: 24px 16px 40px;
-}
-.qb-confirm-wrap { display: flex; flex-direction: column; gap: 14px; }
-.qb-token-card {
-  background: var(--primary); color: white;
-  border-radius: 18px; padding: 32px 24px; text-align: center;
-}
-.qb-token-label {
-  font-size: 0.75rem; font-weight: 700; letter-spacing: 1.2px;
-  text-transform: uppercase; opacity: 0.8; margin-bottom: 8px;
-}
-.qb-token-number {
-  font-size: 5.5rem; font-weight: 900; line-height: 1;
-  letter-spacing: -2px; margin-bottom: 10px;
-}
-.qb-token-hint { font-size: 0.8rem; opacity: 0.75; }
-.qb-confirm-details {
-  background: var(--bg-white); border: 1px solid var(--border-light);
-  border-radius: 14px; padding: 16px;
-}
-.qb-confirm-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 9px 0; border-bottom: 1px solid var(--border-light); font-size: 0.85rem;
-}
-.qb-confirm-row:last-child { border-bottom: none; }
-.qb-confirm-row span { color: var(--text-secondary); }
-.qb-confirm-row strong { font-weight: 600; text-align: right; max-width: 65%; }
-.qb-confirm-row.total-row strong { color: var(--primary); font-size: 1rem; }
-
-.qb-upi-section {
-  background: var(--bg-white); border: 1px solid var(--border-light);
-  border-radius: 14px; padding: 18px;
-}
-.qb-upi-label {
-  font-size: 0.78rem; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px;
-}
-.qb-gpay-btn {
-  width: 100%; padding: 15px; border-radius: 12px;
-  background: #1A73E8; color: white;
-  font-size: 1rem; font-weight: 700; border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  transition: background 0.18s;
-}
-.qb-gpay-btn:hover { background: #1557B0; }
-.qb-upi-copy {
-  display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
-}
-.qb-upi-id-wrap { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-.qb-upi-icon { color: var(--text-muted); flex-shrink: 0; display: flex; }
-.qb-upi-id-text {
-  font-size: 0.9rem; font-weight: 600; font-family: monospace;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.qb-copy-btn {
-  padding: 7px 14px; border-radius: 8px;
-  border: 1.5px solid var(--primary); background: var(--primary-bg);
-  color: var(--primary); font-size: 0.78rem; font-weight: 700;
-  cursor: pointer; flex-shrink: 0; transition: all 0.15s;
-}
-.qb-copy-btn:hover { background: var(--primary); color: white; }
-.qb-upi-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 12px; line-height: 1.5; }
-.qb-view-orders-btn {
-  width: 100%; padding: 14px; border-radius: 12px;
-  border: 1.5px solid var(--border); background: var(--bg-white);
-  color: var(--text); font-size: 0.9rem; font-weight: 600;
-  cursor: pointer; transition: border-color 0.15s;
-}
-.qb-view-orders-btn:hover { border-color: var(--primary); color: var(--primary); }
 `;

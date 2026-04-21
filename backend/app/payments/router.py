@@ -77,7 +77,7 @@ async def create_payment_order(
             "currency": "INR",
             "key_id": settings.RAZORPAY_KEY_ID,
             "order_id": order.id,
-            "prefill": {"name": current_user.name, "email": current_user.email}
+            "prefill": {"name": current_user.student_profile.name if current_user.student_profile else "", "email": current_user.email or ""}
         }
 
     rzp_order = PaymentService.create_razorpay_order(
@@ -95,7 +95,7 @@ async def create_payment_order(
         "currency": rzp_order["currency"],
         "key_id": settings.RAZORPAY_KEY_ID,
         "order_id": order.id,
-        "prefill": {"name": current_user.name, "email": current_user.email}
+        "prefill": {"name": current_user.student_profile.name if current_user.student_profile else "", "email": current_user.email or ""}
     }
 
 
