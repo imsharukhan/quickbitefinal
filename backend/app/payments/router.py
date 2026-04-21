@@ -153,7 +153,7 @@ async def verify_payment(
     formatted = await format_order_response(db, order)
     await manager.notify_vendor(
         str(order.outlet_id),
-        {"type": "PAYMENT_RECEIVED", "order": formatted}
+        {"type": "NEW_ORDER", "order": formatted}
     )
 
     return formatted
@@ -228,7 +228,7 @@ async def razorpay_webhook(
     )
     await manager.notify_vendor(
         str(order.outlet_id),
-        {"type": "PAYMENT_RECEIVED", "order": formatted}
+        {"type": "NEW_ORDER", "order": formatted}
     )
 
     return {"status": "ok"}

@@ -8,6 +8,7 @@ import * as paymentService from '@/services/paymentService';
 import { loadRazorpayScript, openRazorpayCheckout } from '@/utils/razorpay';
 
 const PLATFORM_FEE = 7;
+const isMobileBrowser = () => typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
 const PLATFORM_UPI_ID = 'sharukhansharukhan926@oksbi';
 
 export default function CartPage({ navigate, showToast }) {
@@ -25,16 +26,7 @@ export default function CartPage({ navigate, showToast }) {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useEffect(() => {
-    if (cart.length === 0 && !isProcessingPayment) {
-      return (
-        <div className="empty-state">
-          <div className="empty-icon">🛒</div>
-          <h3>Your cart is empty</h3>
-          <p>Looks like you haven't added anything yet.</p>
-          <button className="btn btn-primary" onClick={() => navigate('home')} style={{ marginTop: '16px' }}>Browse Food</button>
-        </div>
-      );
-    }
+    if (cart.length === 0) return;
     const outlet_id = cart[0].outletId;
     setSlotsLoading(true);
     Promise.all([
@@ -182,7 +174,7 @@ export default function CartPage({ navigate, showToast }) {
   }
 
   /* ─── EMPTY CART ─── */
-  if (cart.length === 0) {
+  if (cart.length === 0 && !isProcessingPayment) {
     return (
       <div className="empty-state">
         <div className="empty-icon">🛒</div>

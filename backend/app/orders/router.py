@@ -20,12 +20,6 @@ async def create_order(
 ):
     order = await service.create_order(db, str(current_user.id), data)
     formatted_order = await service.format_order_response(db, order)
-    
-    await manager.notify_vendor(
-        str(order.outlet_id),
-        {"type": "NEW_ORDER", "order": formatted_order}
-    )
-    
     return formatted_order
 
 @router.get("/my", response_model=list[schemas.OrderResponse])

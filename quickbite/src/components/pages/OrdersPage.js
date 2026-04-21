@@ -8,19 +8,26 @@ import { Clock, RefreshCw } from 'lucide-react';
 
 const PLATFORM_FEE = 7;
 
-function RetryPaymentSection({ order, user, showToast, navigate }) {
+function RetryPaymentSection({ order, user, showToast, navigate, refreshAfterPayment }) {
   const [retrying, setRetrying] = useState(false);
 
   const handleRetryPayment = async () => {
+    if (retrying) return;
     setRetrying(true);
     try {
       const { loadRazorpayScript, openRazorpayCheckout } = await import('@/utils/razorpay');
       const paymentService = await import('@/services/paymentService');
 
       const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) { showToast('Payment gateway failed to load', 'error'); return; }
+      if (!scriptLoaded) {
+        showToast('Payment gateway failed to load. Please try again.', 'error');
+        setRetrying(false);
+        return;
+      }
 
       const rzpData = await paymentService.createPaymentOrder(order.id);
+
+      setRetrying(false); // Reset before opening modal
 
       openRazorpayCheckout({
         rzpData,
@@ -29,6 +36,7 @@ function RetryPaymentSection({ order, user, showToast, navigate }) {
         userEmail: user?.email,
         onSuccess: async (response) => {
           try {
+            showToast('Verifying payment...', 'info');
             await paymentService.verifyPayment({
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
@@ -36,16 +44,16 @@ function RetryPaymentSection({ order, user, showToast, navigate }) {
               order_id: order.id,
             });
             showToast('Payment confirmed! 🎉', 'success');
-            navigate('orders');
+            if (refreshAfterPayment) await refreshAfterPayment();
           } catch {
-            showToast('Payment done! Token will appear shortly.', 'info');
+            showToast('Payment done! Refreshing orders...', 'info');
+            if (refreshAfterPayment) await refreshAfterPayment();
           }
         },
-        onDismiss: () => showToast('Payment cancelled.', 'info'),
+        onDismiss: () => showToast('Payment cancelled. You can retry anytime.', 'info'),
       });
     } catch (err) {
-      showToast('Failed to open payment. Try again.', 'error');
-    } finally {
+      showToast('Failed to open payment. Please try again.', 'error');
       setRetrying(false);
     }
   };
@@ -61,18 +69,18 @@ function RetryPaymentSection({ order, user, showToast, navigate }) {
         style={{
           width: '100%', background: '#FC8019', color: 'white',
           border: 'none', borderRadius: '8px', padding: '12px',
-          fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer',
-          opacity: retrying ? 0.6 : 1
+          fontSize: '0.95rem', fontWeight: 700, cursor: retrying ? 'not-allowed' : 'pointer',
+          opacity: retrying ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
         }}
       >
-        {retrying ? 'Opening payment...' : '💳 Complete Payment'}
+        {retrying ? <><span className="qb-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> Opening...</> : '💳 Complete Payment'}
       </button>
     </div>
   );
 }
 
 export default function OrdersPage({ navigate, showToast }) {
-  const { orders, setOrders, loadOrders, isOrdersLoading } = useApp();
+  const { orders, setOrders, loadOrders, isOrdersLoading, refreshAfterPayment } = useApp();
   const [ratingState, setRatingState] = useState({ id: null, stars: 5, review: '' });
   const [cancelingId, setCancelingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -273,6 +281,7 @@ export default function OrdersPage({ navigate, showToast }) {
                   user={user}
                   showToast={showToast}
                   navigate={navigate}
+                  refreshAfterPayment={refreshAfterPayment}
                 />
               )}
 

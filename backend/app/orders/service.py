@@ -56,8 +56,9 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         existing_id = str(existing_id)
         result = await db.execute(select(Order).where(Order.id == existing_id))
         order = result.scalars().first()
-        if order:
+        if order and order.status not in ["Cancelled", "FAILED"]:
             return order
+        # Cancelled order — fall through and create a fresh one
 
     result = await db.execute(select(Outlet).where(Outlet.id == data.outlet_id))
     outlet = result.scalars().first()
