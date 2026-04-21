@@ -161,43 +161,73 @@ export default function OrdersPage({ navigate, showToast }) {
       <div className="orders-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {orders.map(order => {
           const isPlaced = order.status === 'Placed';
-          const canCancel = isPlaced && order.payment_status === 'PENDING';
+          const placedDate2 = new Date(order.placed_at?.endsWith('Z') ? order.placed_at : order.placed_at + 'Z');
+          const nowIST2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const placedIST2 = new Date(placedDate2.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const isTodayOrder = placedIST2.toDateString() === nowIST2.toDateString();
+          const canCancel = isPlaced && order.payment_status === 'PENDING' && isTodayOrder;
           const canRate = order.status === 'Picked Up' && !order.rating;
 
           return (
             <div key={order.id} className="order-card" style={{ background: 'white', borderRadius: 'var(--radius-lg)', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
 
               {/* Token banner for active orders */}
-              {['Placed', 'Preparing', 'Ready for Pickup'].includes(order.status) ? (
-                order.token_valid_today ? (
-                  <div style={{ background: 'var(--primary)', color: 'white', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>YOUR TOKEN</div>
-                      <div style={{ fontSize: '2.5rem', fontWeight: 900, lineHeight: 1 }}>
-                        #{order.token_number || order.id?.toString().slice(-3) || '---'}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.85 }}>
-                      Show this at<br />the counter
-                    </div>
-                  </div>
-                ) : (
-                  // Previous day active order — payment never completed, just show nothing special
-                  order.payment_status === 'COMPLETED' ? (
-                    <div style={{ background: '#FFF3E0', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '1.4rem' }}>⏰</span>
+              {(() => {
+                const placedDate = new Date(
+                  order.placed_at?.endsWith('Z') ? order.placed_at : order.placed_at + 'Z'
+                );
+                const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+                const placedIST = new Date(placedDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+                const isExpiredDay = placedIST.toDateString() !== nowIST.toDateString();
+
+                if (isExpiredDay) {
+                  return (
+                    <div style={{
+                      background: '#F5F5F5', borderRadius: 'var(--radius)',
+                      padding: '12px 16px', marginBottom: '12px',
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      border: '1px solid #E0E0E0'
+                    }}>
+                      <span style={{ fontSize: '1.4rem', filter: 'grayscale(1)' }}>🎫</span>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#E65100' }}>Token Expired</div>
-                        <div style={{ fontSize: '0.75rem', color: '#BF360C', marginTop: '2px' }}>This token was for a previous day and is no longer valid</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#757575' }}>
+                          Token #{order.token_number} — Expired
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#9E9E9E', marginTop: '2px' }}>
+                          Expired at midnight IST • No longer valid
+                        </div>
                       </div>
                     </div>
-                  ) : null
-                )
-              ) : (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '12px' }}>
-                  Token #{order.token_number || order.id?.toString().slice(-3) || '---'}
-                </span>
-              )}
+                  );
+                }
+
+                if (['Placed', 'Preparing', 'Ready for Pickup'].includes(order.status)) {
+                  return (
+                    <div style={{
+                      background: 'var(--primary)', color: 'white',
+                      borderRadius: 'var(--radius)', padding: '12px 16px',
+                      marginBottom: '12px', display: 'flex',
+                      alignItems: 'center', justifyContent: 'space-between'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>YOUR TOKEN</div>
+                        <div style={{ fontSize: '2.5rem', fontWeight: 900, lineHeight: 1 }}>
+                          #{order.token_number || order.id?.toString().slice(-3) || '---'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.85 }}>
+                        Show this at<br />the counter
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '12px' }}>
+                    Token #{order.token_number || order.id?.toString().slice(-3) || '---'}
+                  </span>
+                );
+              })()}
 
               {/* Order header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-light)' }}>
@@ -237,7 +267,7 @@ export default function OrdersPage({ navigate, showToast }) {
                 </div>
               </div>
 
-              {order.payment_status === 'PENDING' && order.status === 'Placed' && (
+              {order.payment_status === 'PENDING' && order.status === 'Placed' && isTodayOrder && (
                 <RetryPaymentSection
                   order={order}
                   user={user}

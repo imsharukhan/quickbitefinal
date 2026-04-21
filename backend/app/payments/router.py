@@ -99,6 +99,7 @@ async def create_payment_order(
     }
 
 
+
 @router.post("/verify")
 async def verify_payment(
     data: VerifyPaymentRequest,
@@ -133,9 +134,14 @@ async def verify_payment(
     order.payment_gateway_id = data.razorpay_payment_id
     order.updated_at = datetime.utcnow()
 
+    from app.outlets.models import Outlet
+    outlet_res = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
+    outlet_obj = outlet_res.scalars().first()
+    outlet_name = outlet_obj.name if outlet_obj else "canteen"
+
     db.add(Notification(
         user_id=order.user_id,
-        message=f"✅ Payment confirmed! Your token is #{order.token_number}. Show it at the counter.",
+        message=f"✅ Payment confirmed! Your token #{order.token_number} at {outlet_name}. Show it at the counter to collect your order.",
         related_order_id=order.id
     ))
     await db.commit()
@@ -196,9 +202,13 @@ async def razorpay_webhook(
     order.payment_gateway_id = payment_id
     order.updated_at = datetime.utcnow()
 
+    outlet_res2 = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
+    outlet_obj2 = outlet_res2.scalars().first()
+    outlet_name2 = outlet_obj2.name if outlet_obj2 else "canteen"
+
     db.add(Notification(
         user_id=order.user_id,
-        message=f"✅ Payment confirmed! Your token is #{order.token_number}.",
+        message=f"✅ Payment confirmed! Token #{order.token_number} at {outlet_name2}. Show it at the counter to collect your order 🎉",
         related_order_id=order.id
     ))
     await db.commit()

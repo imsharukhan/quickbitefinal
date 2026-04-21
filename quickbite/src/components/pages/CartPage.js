@@ -11,7 +11,7 @@ const PLATFORM_FEE = 7;
 const PLATFORM_UPI_ID = 'sharukhansharukhan926@oksbi';
 
 export default function CartPage({ navigate, showToast }) {
-  const { cart, removeFromCart, updateCartQuantity, cartTotal, placeOrder, upiDeepLink, lastPlacedOrder, isSubmittingRef } = useApp();
+  const { cart, removeFromCart, updateCartQuantity, cartTotal, placeOrder, upiDeepLink, lastPlacedOrder, isSubmittingRef, refreshAfterPayment } = useApp();
   const { user } = useAuth();
 
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -108,9 +108,10 @@ export default function CartPage({ navigate, showToast }) {
               order_id: orderId,
             });
             setVerifiedOrder(verified);
-            setShowOrderConfirmation(true);
-            setIsProcessingPayment(false);
-            showToast('Payment successful! 🎉', 'success');
+              setShowOrderConfirmation(true);
+              setIsProcessingPayment(false);
+              showToast('Payment successful! 🎉', 'success');
+              await refreshAfterPayment();
           } catch (err) {
             setIsProcessingPayment(false);
             showToast('Payment done! Your token will appear in Orders shortly.', 'info');

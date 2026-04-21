@@ -114,13 +114,6 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     for oi in order_items_to_create:
         oi.order_id = order.id
         db.add(oi)
-
-    notification = Notification(
-        user_id=user_id,
-        message=f"Order #{token_number} placed at {outlet.name}! Pay ₹{total_price} via UPI and show your token at the counter.",
-        related_order_id=order.id
-    )
-    db.add(notification)
     
     await db.commit()
     await db.refresh(order)

@@ -46,6 +46,21 @@ export function AppProvider({ children }) {
         }
     }, []);
 
+    const refreshAfterPayment = useCallback(async () => {
+    // Called after Razorpay payment verify succeeds
+    // Loads both orders and notifications so student sees confirmed order
+        try {
+            const [ordersData, notifsData] = await Promise.all([
+                orderService.getMyOrders(),
+                notificationService.getNotifications(),
+            ]);
+            setOrders(ordersData || []);
+            setNotifications(notifsData?.notifications || []);
+        } catch (e) {
+            console.error('refresh after payment failed', e);
+        }
+    }, []);
+
     const loadNotifications = useCallback(async () => {
         setIsNotifsLoading(true);
         try {
@@ -131,7 +146,8 @@ export function AppProvider({ children }) {
             // Store grandTotal on the order object for display
             setLastPlacedOrder({ ...response, displayTotal: total_price });
             clearCart();
-            await loadOrders();
+            // Don't load orders here — payment hasn't happened yet
+            // Orders will load after payment verify succeeds
             return response;
         } finally {
             isSubmittingRef.current = false;
@@ -158,7 +174,7 @@ export function AppProvider({ children }) {
         <AppContext.Provider value={{
             cart, addToCart, removeFromCart, updateCartQuantity, clearCart,
             cartTotal, cartCount, grandTotal, platformFee: PLATFORM_FEE,
-            orders, setOrders, placeOrder, loadOrders, isOrdersLoading,
+            orders, setOrders, placeOrder, loadOrders, refreshAfterPayment, isOrdersLoading,
             upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder,
             notifications, markNotificationRead, markAllNotificationsRead,
             unreadCount, isNotifsLoading, isSubmittingRef
