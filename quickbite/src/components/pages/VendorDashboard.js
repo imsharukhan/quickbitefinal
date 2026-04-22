@@ -424,7 +424,7 @@ export default function VendorDashboard({ showToast }) {
                                             ))}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--border)' }}>
                                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{order.items?.length} item(s)</span>
-                                                <span style={{ fontWeight: 800, fontSize: '1rem' }}>₹{order.total_price}</span>
+                                                <span style={{ fontWeight: 800, fontSize: '1rem' }}>₹{order.items?.reduce((s, i) => s + i.price * i.quantity, 0) || 0}</span>
                                             </div>
                                         </div>
                                         {isGhost && (

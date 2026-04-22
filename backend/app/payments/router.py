@@ -7,7 +7,8 @@ from typing import Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.payments.service import PaymentService, PLATFORM_FEE
+from app.payments.service import PaymentService
+RAZORPAY_FEE_RATE = 0.0236  # 2% platform fee + 18% GST
 from app.orders.models import Order
 from app.orders.service import format_order_response
 from app.outlets.models import Outlet
@@ -33,11 +34,14 @@ class VerifyPaymentRequest(BaseModel):
 
 
 async def _trigger_route_transfer(db: AsyncSession, order: Order, payment_id: str):
-    """Transfer items amount to canteen if linked account is set (post-KYC)."""
+    """Transfer exact food amount to canteen — no fees, no rounding loss."""
+    from app.orders.models import OrderItem
     result = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
     outlet = result.scalars().first()
     if outlet and outlet.razorpay_account_id:
-        items_amount = order.total_price - PLATFORM_FEE
+        items_result = await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
+        order_items = items_result.scalars().all()
+        items_amount = sum(item.price * item.quantity for item in order_items)
         try:
             PaymentService.transfer_to_canteen(
                 payment_id=payment_id,

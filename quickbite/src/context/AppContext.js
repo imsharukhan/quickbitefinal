@@ -6,9 +6,7 @@ import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
 
-const PLATFORM_FEE = 7;
-const PLATFORM_UPI_ID = 'sharukhansharukhan926@oksbi';
-const PLATFORM_UPI_NAME = 'QuickBite';
+const RAZORPAY_RATE = 0.0236; // 2% + 18% GST
 
 export function AppProvider({ children }) {
     const { isLoggedIn } = useAuth();
@@ -139,8 +137,8 @@ export function AppProvider({ children }) {
 
     const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-    // Total including platform fee — used for payment
-    const grandTotal = cartTotal + PLATFORM_FEE;
+    const processingFee = Math.ceil(cartTotal / (1 - RAZORPAY_RATE)) - cartTotal;
+    const grandTotal = cartTotal + processingFee;
 
     const placeOrder = async (pickup_time, total_price) => {
         if (isSubmittingRef.current) return;
@@ -154,11 +152,6 @@ export function AppProvider({ children }) {
             // Send total_price explicitly to backend
             const response = await orderService.placeOrder(outlet_id, items, pickup_time, total_price);
 
-            // Build UPI deep link with platform UPI ID and grand total (items + platform fee)
-            const deepLink = `upi://pay?pa=${PLATFORM_UPI_ID}&pn=${encodeURIComponent(PLATFORM_UPI_NAME)}&am=${total_price}&cu=INR&tn=QuickBite%20${response.id}%20Token%23${response.token_number}`;
-            
-            setUpiDeepLink(deepLink);
-            // Store grandTotal on the order object for display
             setLastPlacedOrder({ ...response, displayTotal: total_price });
             // Cart cleared only after payment succeeds — see CartPage onSuccess
             // Don't load orders here — payment hasn't happened yet
@@ -190,7 +183,7 @@ export function AppProvider({ children }) {
             cart, addToCart, removeFromCart, updateCartQuantity, clearCart,
             cartTotal, cartCount, grandTotal, platformFee: PLATFORM_FEE,
             orders, setOrders, placeOrder, loadOrders, refreshAfterPayment, isOrdersLoading,
-            upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder,
+            upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder, processingFee,
             notifications, markNotificationRead, markAllNotificationsRead,
             unreadCount, isNotifsLoading, isSubmittingRef
         }}>

@@ -369,7 +369,11 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     total_orders = res.scalar() or 0
     
     # 2. Active Orders
-    res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id, Order.status.not_in(["Picked Up", "Cancelled"])))
+    res = await db.execute(select(func.count(Order.id)).where(
+        Order.outlet_id == outlet_id,
+        Order.status.not_in(["Picked Up", "Cancelled"]),
+        Order.payment_status == "COMPLETED"
+    ))
     active_orders = res.scalar() or 0
     
     # 3. Preparing Count
@@ -380,20 +384,30 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id, Order.status == "Picked Up", Order.placed_at >= start_of_day_utc))
     completed_today = res.scalar() or 0
     
-    # 5. Revenue Today
-    res = await db.execute(select(func.sum(Order.total_price)).where(
-        Order.outlet_id == outlet_id,
-        Order.status.in_(["Preparing", "Ready for Pickup", "Picked Up"]),
-        Order.placed_at >= start_of_day_utc
-    ))
-    revenue_today = res.scalar() or 0.0
-    
-    # 6. Total Revenue
-    res = await db.execute(select(func.sum(Order.total_price)).where(
-        Order.outlet_id == outlet_id,
-        Order.status.in_(["Preparing", "Ready for Pickup", "Picked Up"])
-    ))
-    total_revenue = res.scalar() or 0.0
+    # 5. Revenue Today — exact food amount from order items only
+    res = await db.execute(
+        select(func.sum(OrderItem.price * OrderItem.quantity))
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(
+            Order.outlet_id == outlet_id,
+            Order.status == "Picked Up",
+            Order.payment_status == "COMPLETED",
+            Order.placed_at >= start_of_day_utc
+        )
+    )
+    revenue_today = float(res.scalar() or 0.0)
+
+    # 6. Total Revenue — exact food amount from order items only
+    res = await db.execute(
+        select(func.sum(OrderItem.price * OrderItem.quantity))
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(
+            Order.outlet_id == outlet_id,
+            Order.status == "Picked Up",
+            Order.payment_status == "COMPLETED",
+        )
+    )
+    total_revenue = float(res.scalar() or 0.0)
     
     # 7. Pending Payment Count
     res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id, Order.payment_status == "PENDING"))
@@ -402,8 +416,8 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     return {
         "total_orders": total_orders,
         "active_orders": active_orders,
-        "preparing_count": preparing_count,
-        "completed_today": completed_today,
+        "preparing_orders": preparing_count,
+        "orders_today": completed_today,
         "revenue_today": revenue_today,
         "total_revenue": total_revenue,
         "pending_payment_count": pending_payment_count
@@ -428,7 +442,8 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
         revenue_res = await db.execute(
             select(func.sum(Order.total_price)).where(
                 Order.outlet_id == outlet_id,
-                Order.status.in_(["Preparing", "Ready for Pickup", "Picked Up"]),
+                Order.status == "Picked Up",
+                Order.payment_status == "COMPLETED",
                 Order.placed_at >= start_utc,
                 Order.placed_at < end_utc
             )
