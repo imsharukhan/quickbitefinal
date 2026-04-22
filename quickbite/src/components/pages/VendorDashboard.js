@@ -38,10 +38,10 @@ export default function VendorDashboard({ showToast }) {
  
     const [activeTab, setActiveTab] = useState('orders');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [tokenSearch, setTokenSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(null);
     const [revenueVisible, setRevenueVisible] = useState(true);
- 
     const [showAddItem, setShowAddItem] = useState(false);
     const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
     const [outletForm, setOutletForm] = useState({ upi_id: '', opening_time: '', closing_time: '' });
@@ -224,7 +224,13 @@ export default function VendorDashboard({ showToast }) {
     };
  
     const paidOrders = orders.filter(o => o.payment_status === 'COMPLETED');
-    const filteredOrders = filterStatus === 'all' ? paidOrders : paidOrders.filter(o => o.status === filterStatus);
+    const statusFiltered = filterStatus === 'all' ? paidOrders : paidOrders.filter(o => o.status === filterStatus);
+    const filteredOrders = tokenSearch.trim() === ''
+        ? statusFiltered
+        : [
+            ...statusFiltered.filter(o => String(o.token_number) === tokenSearch.trim()),
+            ...statusFiltered.filter(o => String(o.token_number) !== tokenSearch.trim()),
+          ];
  
     const menuByCategory = MENU_CATEGORIES.reduce((acc, cat) => {
         const items = menu.filter(m => m.category === cat);
@@ -317,6 +323,29 @@ export default function VendorDashboard({ showToast }) {
                 </div>
             ) : activeTab === 'orders' ? (
                 <>
+                    {/* Token search bar */}
+                    <div style={{ position: 'relative', marginBottom: '12px' }}>
+                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
+                        <input
+                            type="number"
+                            placeholder="Search by token number..."
+                            value={tokenSearch}
+                            onChange={e => setTokenSearch(e.target.value)}
+                            style={{
+                                width: '100%', padding: '10px 12px 10px 38px',
+                                border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                                fontSize: '0.9rem', background: 'var(--bg-white)',
+                                color: 'var(--text)', boxSizing: 'border-box', outline: 'none',
+                            }}
+                        />
+                        {tokenSearch && (
+                            <button
+                                onClick={() => setTokenSearch('')}
+                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-muted)' }}
+                            >✕</button>
+                        )}
+                    </div>
+
                     <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '12px', scrollbarWidth: 'none' }}>
                         {[{ l: 'All', v: 'all' }, { l: 'New', v: 'Placed' }, { l: 'Preparing', v: 'Preparing' }, { l: 'Ready', v: 'Ready for Pickup' }, { l: 'Done', v: 'Picked Up' }].map(f => (
                             <button key={f.v} onClick={() => setFilterStatus(f.v)}
