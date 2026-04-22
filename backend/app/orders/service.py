@@ -87,9 +87,6 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         ))
 
 
-
-    token_number = await get_daily_token(db, data.outlet_id)
-
     order_id = generate_order_id()
     now_utc = datetime.utcnow()
     
@@ -103,7 +100,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         payment_gateway_id=None,
         total_price=total_price,
         pickup_time=data.pickup_time,
-        token_number=token_number,
+        token_number=None,
         payment_method="upi",
         placed_at=now_utc,
         updated_at=now_utc,

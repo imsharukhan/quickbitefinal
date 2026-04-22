@@ -13,7 +13,7 @@ class Order(Base):
     status: Mapped[str] = mapped_column(String(50), default="Placed")
     total_price: Mapped[float] = mapped_column(Float, default=0.0)
     pickup_time: Mapped[str] = mapped_column(String(20))
-    token_number: Mapped[int] = mapped_column(Integer)
+    token_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     payment_method: Mapped[str] = mapped_column(String(50), default="upi")
     payment_status: Mapped[str] = mapped_column(String(50), default="pending")
     payment_confirmed_by_vendor: Mapped[bool] = mapped_column(Boolean, default=False)

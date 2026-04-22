@@ -87,7 +87,8 @@ export default function CartPage({ navigate, showToast }) {
         userName: user?.student_profile?.name || user?.name || '',
         userEmail: user?.email || '',
 
-        onSuccess: async (razorpayResponse) => {
+        onSuccess: (razorpayResponse) => {
+          setTimeout(async () => {
           try {
             showToast('Verifying payment...', 'info');
             await paymentService.verifyPayment({
@@ -108,6 +109,7 @@ export default function CartPage({ navigate, showToast }) {
             setPaymentLoading(false);
             navigate('orders');
           }
+          }, 400); // wait for Razorpay modal to fully close on mobile
         },
 
         onDismiss: () => {

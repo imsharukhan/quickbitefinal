@@ -223,7 +223,8 @@ export default function VendorDashboard({ showToast }) {
     return null;
     };
  
-    const filteredOrders = filterStatus === 'all' ? orders : orders.filter(o => o.status === filterStatus);
+    const paidOrders = orders.filter(o => o.payment_status === 'COMPLETED');
+    const filteredOrders = filterStatus === 'all' ? paidOrders : paidOrders.filter(o => o.status === filterStatus);
  
     const menuByCategory = MENU_CATEGORIES.reduce((acc, cat) => {
         const items = menu.filter(m => m.category === cat);

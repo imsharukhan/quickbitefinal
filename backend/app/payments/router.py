@@ -14,6 +14,7 @@ from app.outlets.models import Outlet
 from app.notifications.models import Notification
 from app.orders.websocket import manager
 from app.auth.dependencies import get_current_user
+from app.orders.service import get_daily_token
 from app.users.models import User
 from app.config import settings
 
@@ -133,6 +134,8 @@ async def verify_payment(
     order.payment_status = "COMPLETED"
     order.payment_gateway_id = data.razorpay_payment_id
     order.updated_at = datetime.utcnow()
+    if order.token_number is None:
+        order.token_number = await get_daily_token(db, str(order.outlet_id))
 
     from app.outlets.models import Outlet
     outlet_res = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
@@ -201,6 +204,8 @@ async def razorpay_webhook(
     order.payment_status = "COMPLETED"
     order.payment_gateway_id = payment_id
     order.updated_at = datetime.utcnow()
+    if order.token_number is None:
+        order.token_number = await get_daily_token(db, str(order.outlet_id))
 
     outlet_res2 = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
     outlet_obj2 = outlet_res2.scalars().first()
