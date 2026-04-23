@@ -368,20 +368,29 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id))
     total_orders = res.scalar() or 0
     
-    # 2. Active Orders
+    # 2. Active Orders TODAY
     res = await db.execute(select(func.count(Order.id)).where(
         Order.outlet_id == outlet_id,
         Order.status.not_in(["Picked Up", "Cancelled"]),
-        Order.payment_status == "COMPLETED"
+        Order.payment_status == "COMPLETED",
+        Order.placed_at >= start_of_day_utc
     ))
     active_orders = res.scalar() or 0
     
-    # 3. Preparing Count
-    res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id, Order.status == "Preparing"))
+    # 3. Preparing Count TODAY
+    res = await db.execute(select(func.count(Order.id)).where(
+        Order.outlet_id == outlet_id,
+        Order.status == "Preparing",
+        Order.placed_at >= start_of_day_utc
+    ))
     preparing_count = res.scalar() or 0
     
-    # 4. Completed Today
-    res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id, Order.status == "Picked Up", Order.placed_at >= start_of_day_utc))
+    # 4. Orders placed today (all paid)
+    res = await db.execute(select(func.count(Order.id)).where(
+        Order.outlet_id == outlet_id,
+        Order.payment_status == "COMPLETED",
+        Order.placed_at >= start_of_day_utc
+    ))
     completed_today = res.scalar() or 0
     
     # 5. Revenue Today — exact food amount from order items only

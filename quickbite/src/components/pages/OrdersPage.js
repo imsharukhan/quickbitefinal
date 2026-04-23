@@ -88,7 +88,7 @@ export default function OrdersPage({ navigate, showToast }) {
   }
 
   return (
-    <div className="orders-page pb-section">
+    <div className="orders-page pb-section" style={{ maxWidth: '560px', margin: '0 auto', padding: '0 16px' }}>
       <div className="menu-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: '800' }}>Your Orders</h1>
         <button onClick={loadOrders} disabled={isOrdersLoading} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
@@ -96,7 +96,7 @@ export default function OrdersPage({ navigate, showToast }) {
         </button>
       </div>
 
-      <div className="orders-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="orders-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '32px' }}>
         {visibleOrders.map(order => {
           const isPlaced = order.status === 'Placed';
           const placedDate2 = new Date(order.placed_at?.endsWith('Z') ? order.placed_at : order.placed_at + 'Z');
@@ -107,7 +107,7 @@ export default function OrdersPage({ navigate, showToast }) {
           const canRate = order.status === 'Picked Up' && !order.rating;
 
           return (
-            <div key={order.id} className="order-card" style={{ background: 'white', borderRadius: 'var(--radius-lg)', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+            <div key={order.id} className="order-card" style={{ background: 'white', borderRadius: 'var(--radius-lg)', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid var(--border-light)' }}>
 
               {/* Token banner for active orders */}
               {(() => {
