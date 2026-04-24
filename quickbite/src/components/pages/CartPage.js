@@ -111,8 +111,21 @@ export default function CartPage({ navigate, showToast }) {
           }, 400); // wait for Razorpay modal to fully close on mobile
         },
 
-        onDismiss: () => {
-          // User closed Razorpay without paying — stay on cart
+        onDismiss: async () => {
+          // On mobile (especially GPay), payment may have succeeded even if dismissed
+          // Silently check order status before showing "cancelled"
+          try {
+            const { getOrderById } = await import('@/services/orderService');
+            const latestOrder = await getOrderById(orderId);
+            if (latestOrder?.payment_status === 'COMPLETED') {
+              clearCart();
+              showToast('Payment successful! 🎉', 'success');
+              await refreshAfterPayment();
+              setPaymentLoading(false);
+              navigate('orders');
+              return;
+            }
+          } catch (_) {}
           setLoading(false);
           setPaymentLoading(false);
           showToast('Payment cancelled. Tap "Place Order" to try again.', 'info');

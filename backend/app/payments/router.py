@@ -38,7 +38,7 @@ async def _trigger_route_transfer(db: AsyncSession, order: Order, payment_id: st
     from app.orders.models import OrderItem
     result = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
     outlet = result.scalars().first()
-    if outlet and outlet.razorpay_account_id:
+    if outlet and getattr(outlet, 'razorpay_account_id', None):
         items_result = await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
         order_items = items_result.scalars().all()
         items_amount = sum(item.price * item.quantity for item in order_items)

@@ -27,7 +27,8 @@ async def get_daily_token(db: AsyncSession, outlet_id: str) -> int:
     result = await db.execute(
         select(func.count(Order.id)).where(
             Order.outlet_id == outlet_id,
-            Order.placed_at >= start_of_day_utc
+            Order.placed_at >= start_of_day_utc,
+            Order.token_number.isnot(None)
         )
     )
     count = result.scalar()
