@@ -39,22 +39,33 @@ export default function HomePage({ navigate }) {
 
   const filters = ['All', 'Open Now', 'Closed'];
 
-  const fetchOutlets = async () => {
-    setLoading(true);
+  const fetchOutlets = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const data = await outletService.getAllOutlets();
       setOutlets(data || []);
     } catch (err) {
-      setError('Failed to load outlets. Please try again.');
+      if (!silent) setError('Failed to load outlets. Please try again.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  useEffect(() => { 
-    fetchOutlets(); 
-    const interval = setInterval(fetchOutlets, 60000);
+  useEffect(() => {
+    // Show cached data instantly if available, then refresh silently
+    outletService.getAllOutlets().then(data => {
+      if (data?.length) {
+        setOutlets(data);
+        setLoading(false);
+        // Silent background refresh
+        setTimeout(() => fetchOutlets(true), 100);
+      } else {
+        fetchOutlets(false);
+      }
+    }).catch(() => fetchOutlets(false));
+
+    const interval = setInterval(() => fetchOutlets(true), 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -222,7 +233,11 @@ export default function HomePage({ navigate }) {
 }
 
 function OutletCard({ outlet, onClick }) {
-  const rating = outlet.rating ? parseFloat(outlet.rating).toFixed(1) : '—';
+  const handleMouseEnter = (e) => {
+    e.currentTarget.style.transform = 'scale(1.02)';
+    // Prefetch menu on hover so it's instant when they click
+    import('@/services/menuService').then(m => m.getMenuByOutlet(outlet.id)).catch(() => {});
+  };
 
   const getMappedImage = (name) => {
     if (name.includes('Dimora')) return '/images/dimora.jpg';
@@ -242,7 +257,7 @@ function OutletCard({ outlet, onClick }) {
         flexDirection: 'column',
         boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
       }}
-      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
     >
       <div className="aspect-video w-full overflow-hidden relative" style={{ backgroundColor: 'var(--primary)', aspectRatio: '16/9' }}>
@@ -263,18 +278,13 @@ function OutletCard({ outlet, onClick }) {
              🔴 Closed
            </div>
         )}
-        {outlet.rating >= 4.5 && outlet.is_open && (
-           <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', color: '#000', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-             ⭐ Top Rated
-           </div>
-        )}
       </div>
       <div className="flex-1 flex flex-col" style={{ padding: '20px' }}>
         <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text)', marginBottom: '6px' }}>{outlet.name}</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>{outlet.description || outlet.cuisine || 'Campus Canteen'}</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}>
-            <span style={{ color: '#FFB800' }}>⭐</span> {rating}
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            {outlet.cuisine || 'Campus Canteen'}
           </span>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             🕐 {outlet.opening_time ? `${formatTime(outlet.opening_time)} – ${formatTime(outlet.closing_time)}` : 'Timings'}
