@@ -61,11 +61,12 @@ export default function CartPage({ navigate, showToast }) {
     if (cart.length === 0) return;
     const outlet_id = cart[0].outletId;
     setSlotsLoading(true);
+    // Run outlet check and slots in parallel — menu comes from cache instantly
     Promise.all([
       outletService.getOutletById(outlet_id),
-      menuService.getMenuByOutlet(outlet_id),
-      outletService.getAvailableSlots(outlet_id)
-    ]).then(([outletData, menuData, slotsData]) => {
+      outletService.getAvailableSlots(outlet_id),
+      menuService.getMenuByOutlet(outlet_id), // hits cache from MenuPage — instant
+    ]).then(([outletData, slotsData, menuData]) => {
       if (!outletData.is_open) {
         setOutletClosed(true);
         setClosedMessage(`${cart[0].outletName} is currently closed.`);
@@ -85,7 +86,7 @@ export default function CartPage({ navigate, showToast }) {
       setOutletClosed(true);
       setClosedMessage('Failed to verify outlet status. Please try again.');
     }).finally(() => setSlotsLoading(false));
-  }, [cart]);
+  }, []);
 
   const handlePlaceOrder = async () => {
     if (!selectedSlot) { showToast('Please select a pickup time', 'error'); return; }

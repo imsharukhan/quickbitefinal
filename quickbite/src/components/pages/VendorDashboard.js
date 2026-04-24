@@ -824,10 +824,9 @@ export default function VendorDashboard({ showToast }) {
                                 { label: 'UPI ID', value: selectedOutlet?.upi_id || 'Not set', icon: '💳' },
                                 { label: 'Outlet Status', value: selectedOutlet?.is_open ? 'Open 🟢' : 'Closed 🔴', icon: '📍' },
                                 { label: 'Hours', value: selectedOutlet ? `${selectedOutlet.opening_time} – ${selectedOutlet.closing_time}` : '—', icon: '🕐' },
-                                { label: 'Rating', value: selectedOutlet?.rating ? `⭐ ${selectedOutlet.rating}` : 'No ratings yet', icon: '⭐' },
                                 { label: 'Menu Items', value: 'Unlimited', icon: '📋' },
                             ].map((row, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: i < 6 ? '1px solid var(--border-light)' : 'none' }}>
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: i < 5 ? '1px solid var(--border-light)' : 'none'}}>
                                     <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>{row.icon}</div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{row.label}</div>

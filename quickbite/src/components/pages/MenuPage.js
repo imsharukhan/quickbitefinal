@@ -44,7 +44,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
  
   useEffect(() => {
     fetchMenu();
-    const interval = setInterval(fetchMenu, 30000);
+    const interval = setInterval(fetchMenu, 60000);
     return () => clearInterval(interval);
   }, [outlet?.id]);
  
@@ -108,7 +108,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
               <h1 style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.2 }}>{outlet.name}</h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  ⭐ {outlet.rating || '—'} • {outlet.cuisine || 'Campus Canteen'}
+                  {outlet.cuisine || 'Campus Canteen'}
                 </span>
                 <span style={{
                   fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px',
