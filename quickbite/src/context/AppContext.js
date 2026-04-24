@@ -181,9 +181,9 @@ export function AppProvider({ children }) {
     return (
         <AppContext.Provider value={{
             cart, addToCart, removeFromCart, updateCartQuantity, clearCart,
-            cartTotal, cartCount, grandTotal, platformFee: PLATFORM_FEE,
+            cartTotal, cartCount, grandTotal, processingFee,
             orders, setOrders, placeOrder, loadOrders, refreshAfterPayment, isOrdersLoading,
-            upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder, processingFee,
+            upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder,
             notifications, markNotificationRead, markAllNotificationsRead,
             unreadCount, isNotifsLoading, isSubmittingRef
         }}>

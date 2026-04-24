@@ -10,8 +10,7 @@ import { loadRazorpayScript, openRazorpayCheckout } from '@/utils/razorpay';
 const RAZORPAY_RATE = 0.0236;
 
 export default function CartPage({ navigate, showToast }) {
-  const { cart, removeFromCart, updateCartQuantity, cartTotal, placeOrder, clearCart, isSubmittingRef, refreshAfterPayment, processingFee } = useApp();
-  const grandTotal = cartTotal + processingFee;
+  const { cart, removeFromCart, updateCartQuantity, cartTotal, grandTotal, placeOrder, clearCart, isSubmittingRef, refreshAfterPayment, processingFee } = useApp();
   const { user } = useAuth();
 
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -250,14 +249,11 @@ export default function CartPage({ navigate, showToast }) {
         <h2 className="qb-section-title">Bill details</h2>
         <div className="qb-bill-row"><span>Item total</span><span>₹{cartTotal}</span></div>
         <div className="qb-bill-row">
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            Convenience fee
-            <span style={{ fontSize: '0.68rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', padding: '1px 5px', color: 'var(--text-muted)', fontWeight: 600 }}>2% + GST</span>
-          </span>
+          <span>Processing fee (2.36%)</span>
           <span>₹{processingFee}</span>
         </div>
         <div className="qb-bill-divider" />
-        <div className="qb-bill-row total"><span>You pay</span><span>₹{grandTotal}</span></div>
+        <div className="qb-bill-row total"><span>Total</span><span>₹{grandTotal}</span></div>
       </div>
 
       {/* Place order button */}
