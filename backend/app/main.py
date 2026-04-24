@@ -172,8 +172,19 @@ async def lifespan(app: FastAPI):
         print(f"❌ Column migration error: {e}")
 
     
-    # ── Step 3: Seed vendor accounts ──────────────────────────────────
-    await seed_data()
+    # Seed vendor accounts
+    try:
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as _check_db:
+            from sqlalchemy.future import select as _sel
+            from app.vendors.models import Vendor as _V
+            _r = await _check_db.execute(_sel(_V).limit(1))
+            if not _r.scalars().first():
+                await seed_data()
+            else:
+                print("✅ Vendors already seeded — skipping.")
+    except Exception as _e:
+        print(f"⚠️ Seed check failed: {_e}")
     yield
 
 
@@ -183,8 +194,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://quickbitefinal.vercel.app",
-        "http://localhost:3000",        # ✅ local dev
-        "http://localhost:3001",        # ✅ just in case
+        *(["http://localhost:3000", "http://localhost:3001"] if settings.DEBUG else []),
     ],
     allow_credentials=True,
     allow_methods=["*"],

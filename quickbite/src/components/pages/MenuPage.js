@@ -30,13 +30,17 @@ export default function MenuPage({ outlet, navigate, showToast }) {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
  
+  const [menuError, setMenuError] = useState(false);
+
   const fetchMenu = async () => {
     if (!outlet?.id) return;
+    setMenuError(false);
     try {
       const data = await menuService.getMenuByOutlet(outlet.id);
       setMenuItems(data || []);
     } catch (err) {
       console.error(err);
+      setMenuError(true);
     } finally {
       setLoading(false);
     }
@@ -226,8 +230,18 @@ export default function MenuPage({ outlet, navigate, showToast }) {
           </>
         )}
  
+        {/* Error */}
+        {!loading && menuError && (
+          <div className="empty-state" style={{ paddingTop: '40px' }}>
+            <div className="empty-icon">⚠️</div>
+            <h3>Couldn't load menu</h3>
+            <p>Something went wrong. Please try again.</p>
+            <button className="btn btn-outline" onClick={fetchMenu} style={{ marginTop: '14px' }}>Retry</button>
+          </div>
+        )}
+
         {/* Empty */}
-        {!loading && filteredItems.length === 0 && (
+        {!loading && !menuError && filteredItems.length === 0 && (
           <div className="empty-state" style={{ paddingTop: '40px' }}>
             <div className="empty-icon">🍽️</div>
             <h3>No items found</h3>

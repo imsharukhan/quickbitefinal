@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite:///./test.db"
+    DATABASE_URL: str
     REDIS_URL: str
     REDIS_TOKEN: str
     SECRET_KEY: str
