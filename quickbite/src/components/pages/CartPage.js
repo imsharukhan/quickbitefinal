@@ -119,18 +119,21 @@ export default function CartPage({ navigate, showToast }) {
         },
 
         onDismiss: async () => {
-          // On mobile (especially GPay), payment may have succeeded even if dismissed
-          // Silently check order status before showing "cancelled"
+          // On mobile (GPay/PhonePe), payment may have succeeded even if dismissed
           try {
-            const { getOrderById } = await import('@/services/orderService');
-            const latestOrder = await getOrderById(orderId);
-            if (latestOrder?.payment_status === 'COMPLETED') {
-              clearCart();
-              showToast('Payment successful! 🎉', 'success');
-              await refreshAfterPayment();
-              setPaymentLoading(false);
-              navigate('orders');
-              return;
+            const orderRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/orders/${orderId}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('qb_token')}` }
+            });
+            if (orderRes.ok) {
+              const orderData = await orderRes.json();
+              if (orderData?.payment_status === 'COMPLETED') {
+                clearCart();
+                showToast('Payment successful! 🎉', 'success');
+                await refreshAfterPayment();
+                setPaymentLoading(false);
+                navigate('orders');
+                return;
+              }
             }
           } catch (_) {}
           setLoading(false);

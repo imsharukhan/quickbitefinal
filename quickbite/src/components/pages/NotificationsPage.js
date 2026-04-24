@@ -6,11 +6,8 @@ function formatRelativeTime(dateString) {
   const date = new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
   const now = new Date();
   const diffInSeconds = Math.floor((now - date) / 1000);
-  
   if (diffInSeconds < 60) return 'Just now';
-  
   const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' });
-  
   if (diffInSeconds < 3600) return rtf.format(-Math.floor(diffInSeconds / 60), 'minute');
   if (diffInSeconds < 86400) return rtf.format(-Math.floor(diffInSeconds / 3600), 'hour');
   if (diffInSeconds < 2592000) return rtf.format(-Math.floor(diffInSeconds / 86400), 'day');
@@ -18,27 +15,43 @@ function formatRelativeTime(dateString) {
 }
 
 export default function NotificationsPage({ navigate }) {
-  const { notifications, markNotificationRead, markAllNotificationsRead, isNotifsLoading } = useApp();
+  const { notifications, markNotificationRead, markAllNotificationsRead, isNotifsLoading, setNotifications } = useApp();
+
+  const handleMarkAllRead = async () => {
+    // Optimistic update — instant UI response
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    try { await markAllNotificationsRead(); } catch (_) {}
+  };
+
+  const handleClearAll = async () => {
+    // Optimistic — clear locally immediately
+    setNotifications([]);
+    try { await markAllNotificationsRead(); } catch (_) {}
+  };
 
   if (isNotifsLoading && notifications.length === 0) {
-      return (
-        <div className="empty-state" style={{ height: '100vh' }}>
-          <div className="spinner" style={{ width: '40px', height: '40px', borderWidth: '4px', borderColor: 'var(--primary-light)', borderTopColor: 'var(--primary)' }}></div>
-        </div>
-      );
+    return (
+      <div className="empty-state" style={{ height: '100vh' }}>
+        <div className="spinner" style={{ width: '40px', height: '40px', borderWidth: '4px', borderColor: 'var(--primary-light)', borderTopColor: 'var(--primary)' }} />
+      </div>
+    );
   }
 
   return (
-    <div className="notifications-page pb-section">
-      <div className="menu-header" style={{ marginBottom: '20px' }}>
-        <div className="menu-header-info">
-          <h1>Notifications</h1>
-          <p>Stay updated on your orders</p>
+    <div style={{ maxWidth: '560px', margin: '0 auto', padding: '16px 16px 120px' }}>
+      <style>{notifStyles}</style>
+
+      {/* Header */}
+      <div className="nf-header">
+        <div className="nf-header-left">
+          <h1 className="nf-title">Notifications</h1>
+          <p className="nf-sub">Stay updated on your orders</p>
         </div>
         {notifications.length > 0 && (
-          <button className="text-btn" onClick={markAllNotificationsRead} style={{ color: 'var(--primary)' }}>
-            Mark all read
-          </button>
+          <div className="nf-actions">
+            <button className="nf-btn-text" onClick={handleMarkAllRead}>Mark all read</button>
+            <button className="nf-btn-clear" onClick={handleClearAll}>Clear all</button>
+          </div>
         )}
       </div>
 
@@ -49,26 +62,31 @@ export default function NotificationsPage({ navigate }) {
           <p>You have no new notifications.</p>
         </div>
       ) : (
-        <div className="notifications-list">
+        <div className="nf-list">
           {notifications.map(notif => (
-            <div 
-              key={notif.id} 
-              className={`notification-item ${!notif.is_read ? 'unread' : ''}`}
+            <div
+              key={notif.id}
+              className={`nf-item ${!notif.is_read ? 'unread' : ''}`}
               onClick={() => {
                 if (!notif.is_read) markNotificationRead(notif.id);
                 if (notif.related_order_id && navigate) navigate('orders');
               }}
               style={{ cursor: notif.related_order_id ? 'pointer' : 'default' }}
             >
-              <div className="notif-icon">
-                {notif.message.toLowerCase().includes('ready') ? '🍽️' : 
-                 notif.message.toLowerCase().includes('confirmed') ? '✅' : '🔔'}
+              <div className="nf-icon">
+                {notif.message.toLowerCase().includes('ready') ? '🍽️'
+                  : notif.message.toLowerCase().includes('confirmed') ? '✅' : '🔔'}
               </div>
-              <div className="notif-content">
-                <p>{notif.message} {notif.related_order_id && <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold' }}> → View Order</span>}</p>
-                <span className="notif-time">{formatRelativeTime(notif.created_at)}</span>
+              <div className="nf-body">
+                <p className="nf-msg">
+                  {notif.message}
+                  {notif.related_order_id && (
+                    <span className="nf-view"> → View Order</span>
+                  )}
+                </p>
+                <span className="nf-time">{formatRelativeTime(notif.created_at)}</span>
               </div>
-              {!notif.is_read && <div className="unread-dot"></div>}
+              {!notif.is_read && <div className="nf-dot" />}
             </div>
           ))}
         </div>
@@ -76,3 +94,114 @@ export default function NotificationsPage({ navigate }) {
     </div>
   );
 }
+
+const notifStyles = `
+.nf-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 20px;
+}
+.nf-header-left {
+  min-width: 0;
+  flex: 1;
+}
+.nf-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nf-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nf-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.nf-btn-text {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.nf-btn-clear {
+  background: var(--red-bg, #fff0f0);
+  border: 1px solid var(--red, #e53935);
+  color: var(--red, #e53935);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.nf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nf-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  transition: background 0.15s;
+  position: relative;
+}
+.nf-item.unread {
+  background: var(--primary-bg, #fff8f0);
+  border-color: var(--primary-light, #fcd49a);
+}
+.nf-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.nf-body {
+  flex: 1;
+  min-width: 0;
+}
+.nf-msg {
+  font-size: 0.87rem;
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0 0 4px;
+  word-break: break-word;
+}
+.nf-view {
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.nf-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.nf-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+`;

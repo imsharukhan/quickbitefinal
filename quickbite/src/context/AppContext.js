@@ -184,7 +184,7 @@ export function AppProvider({ children }) {
             cartTotal, cartCount, grandTotal, processingFee,
             orders, setOrders, placeOrder, loadOrders, refreshAfterPayment, isOrdersLoading,
             upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder,
-            notifications, markNotificationRead, markAllNotificationsRead,
+            notifications, setNotifications, markNotificationRead, markAllNotificationsRead,
             unreadCount, isNotifsLoading, isSubmittingRef
         }}>
             {children}

@@ -300,13 +300,17 @@ export default function VendorDashboard({ showToast }) {
                     <div key={tab} className={`dashboard-tab ${activeTab === tab ? 'active' : ''}`}
                         onClick={async () => {
                             setActiveTab(tab);
-                            if (tab === 'history' && selectedOutlet && historyData.length === 0) {
+                            if (tab === 'history' && selectedOutlet) {
+                                setHistoryData([]);
                                 setHistoryLoading(true);
                                 try {
-                                    const data = await orderSvc.getOutletHistory(selectedOutlet.id);
+                                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
+                                    const data = await Promise.race([orderSvc.getOutletHistory(selectedOutlet.id), timeout]);
                                     setHistoryData(data);
-                                } catch (e) { showToast('Failed to load history', 'error'); }
-                                finally { setHistoryLoading(false); }
+                                } catch (e) {
+                                    showToast(e.message === 'timeout' ? 'History is taking too long — try again' : 'Failed to load history', 'error');
+                                    setHistoryData([]);
+                                } finally { setHistoryLoading(false); }
                             }
                         }}
                         style={{ textTransform: 'capitalize', flex: 1, textAlign: 'center' }}>
