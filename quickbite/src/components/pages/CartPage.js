@@ -20,6 +20,7 @@ export default function CartPage({ navigate, showToast }) {
   const [closedMessage, setClosedMessage] = useState('');
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   useEffect(() => {
     if (cart.length === 0) return;
     const outlet_id = cart[0].outletId;
@@ -180,7 +181,12 @@ export default function CartPage({ navigate, showToast }) {
         {cart.map((item, idx) => (
           <div key={item.id} className={`qb-cart-item ${idx < cart.length - 1 ? 'qb-cart-item--bordered' : ''}`}>
             <div className={`qb-veg-dot ${item.is_veg ? 'veg' : 'nonveg'}`}><span></span></div>
-            <div className="qb-item-img"><span>{item.is_veg ? '🥗' : '🍗'}</span></div>
+            <div className="qb-item-img">
+              {item.image_url
+                ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} />
+                : <span>{item.is_veg ? '🥗' : '🍗'}</span>
+              }
+            </div>
             <div className="qb-item-info">
               <p className="qb-item-name">{item.name}</p>
               <p className="qb-item-price">₹{item.price}</p>
@@ -269,9 +275,17 @@ export default function CartPage({ navigate, showToast }) {
             <>Place Order • ₹{grandTotal}</>
           )}
         </button>
-        <button className="qb-clear-btn" onClick={() => { if (window.confirm('Clear cart?')) { cart.forEach(i => removeFromCart(i.id)); navigate('home'); } }}>
-          Clear cart
-        </button>
+        {showClearConfirm ? (
+          <div className="qb-clear-confirm">
+            <span>Remove all items?</span>
+            <button className="qb-clear-yes" onClick={() => { cart.forEach(i => removeFromCart(i.id)); navigate('home'); }}>Yes, clear</button>
+            <button className="qb-clear-no" onClick={() => setShowClearConfirm(false)}>Cancel</button>
+          </div>
+        ) : (
+          <button className="qb-clear-btn" onClick={() => setShowClearConfirm(true)}>
+            Clear cart
+          </button>
+        )}
       </div>
     </div>
   );
@@ -336,6 +350,7 @@ const cartStyles = `
   width: 44px; height: 44px; border-radius: 10px;
   background: var(--bg); display: flex; align-items: center;
   justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+  overflow: hidden;
 }
 .qb-item-info { flex: 1; min-width: 0; }
 .qb-item-name { font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -444,4 +459,18 @@ const cartStyles = `
   border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.qb-clear-confirm {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.82rem; color: var(--text-secondary);
+}
+.qb-clear-yes {
+  background: var(--red); color: white;
+  border: none; border-radius: 6px;
+  padding: 5px 12px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+}
+.qb-clear-no {
+  background: none; border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px;
+  font-size: 0.78rem; font-weight: 600; cursor: pointer; color: var(--text-secondary);
+}
 `;

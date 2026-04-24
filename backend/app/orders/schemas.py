@@ -33,7 +33,7 @@ class OrderResponse(BaseModel):
     payment_gateway_id: Optional[str]
     total_price: float
     pickup_time: str
-    token_number: int
+    token_number: Optional[int] = None
     payment_method: str
     placed_at: datetime
     updated_at: datetime
@@ -41,6 +41,7 @@ class OrderResponse(BaseModel):
     upi_deep_link: str
     can_cancel: bool
     can_rate: bool
+    token_valid_today: bool = False
 
 class StatusUpdate(BaseModel):
     status: str
