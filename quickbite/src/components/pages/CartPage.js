@@ -28,6 +28,35 @@ export default function CartPage({ navigate, showToast }) {
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const activeOrderIdRef = useRef(null);
+  const paymentDoneRef = useRef(false);
+
+  useEffect(() => {
+    const handleVisibility = async () => {
+      if (document.visibilityState === 'visible' && activeOrderIdRef.current && !paymentDoneRef.current) {
+        try {
+          const token = localStorage.getItem('qb_token');
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/orders/${activeOrderIdRef.current}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.payment_status === 'COMPLETED') {
+              paymentDoneRef.current = true;
+              clearCart();
+              showToast('Payment successful! 🎉', 'success');
+              await refreshAfterPayment();
+              setPaymentLoading(false);
+              setLoading(false);
+              navigate('orders');
+            }
+          }
+        } catch (_) {}
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
   useEffect(() => {
     if (cart.length === 0) return;
     const outlet_id = cart[0].outletId;
@@ -76,6 +105,8 @@ export default function CartPage({ navigate, showToast }) {
       const totalWithFee = grandTotal;
       const createdOrder = await placeOrder(selectedSlot, totalWithFee);
       const orderId = createdOrder?.id;
+      activeOrderIdRef.current = orderId;
+      paymentDoneRef.current = false;
 
       if (!orderId) {
         showToast('Order creation failed. Please try again.', 'error');
@@ -103,6 +134,7 @@ export default function CartPage({ navigate, showToast }) {
               razorpay_signature: razorpayResponse.razorpay_signature,
               order_id: orderId,
             });
+            paymentDoneRef.current = true;
             clearCart();
             showToast('Payment successful! 🎉', 'success');
             await refreshAfterPayment();
@@ -110,6 +142,7 @@ export default function CartPage({ navigate, showToast }) {
             navigate('orders');
           } catch (err) {
             // Verify failed but Razorpay confirmed — webhook will mark it COMPLETED
+            paymentDoneRef.current = true;
             clearCart();
             showToast('Payment received! Your order will appear in Orders shortly.', 'info');
             setPaymentLoading(false);
@@ -119,21 +152,18 @@ export default function CartPage({ navigate, showToast }) {
         },
 
         onDismiss: async () => {
-          // On mobile (GPay/PhonePe), payment may have succeeded even if dismissed
+          // On mobile (especially GPay), payment may have succeeded even if dismissed
+          // Silently check order status before showing "cancelled"
           try {
-            const orderRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/orders/${orderId}`, {
-              headers: { Authorization: `Bearer ${localStorage.getItem('qb_token')}` }
-            });
-            if (orderRes.ok) {
-              const orderData = await orderRes.json();
-              if (orderData?.payment_status === 'COMPLETED') {
-                clearCart();
-                showToast('Payment successful! 🎉', 'success');
-                await refreshAfterPayment();
-                setPaymentLoading(false);
-                navigate('orders');
-                return;
-              }
+            const { getOrderById } = await import('@/services/orderService');
+            const latestOrder = await getOrderById(orderId);
+            if (latestOrder?.payment_status === 'COMPLETED') {
+              clearCart();
+              showToast('Payment successful! 🎉', 'success');
+              await refreshAfterPayment();
+              setPaymentLoading(false);
+              navigate('orders');
+              return;
             }
           } catch (_) {}
           setLoading(false);

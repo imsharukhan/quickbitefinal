@@ -6,12 +6,10 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import * as orderService from '@/services/orderService';
 import { Clock, RefreshCw } from 'lucide-react';
 
-const PLATFORM_FEE = 7;
 
 export default function OrdersPage({ navigate, showToast }) {
   const { orders, setOrders, loadOrders, isOrdersLoading, refreshAfterPayment } = useApp();
   const visibleOrders = orders.filter(o => o.payment_status !== 'PENDING');
-  const [ratingState, setRatingState] = useState({ id: null, stars: 5, review: '' });
   const [cancelingId, setCancelingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
@@ -57,17 +55,6 @@ export default function OrdersPage({ navigate, showToast }) {
     }
   };
 
-  const submitRating = async (id) => {
-    try {
-      await orderService.rateOrder(id, ratingState.stars, ratingState.review);
-      setRatingState({ id: null, stars: 5, review: '' });
-      await loadOrders();
-      if (showToast) showToast('Thank you for rating!', 'success');
-    } catch(e) {
-      if (showToast) showToast('Failed to submit rating', 'error');
-    }
-  };
-
   if (isOrdersLoading && visibleOrders.length === 0) {
     return (
       <div className="empty-state" style={{ height: '100vh' }}>
@@ -104,7 +91,6 @@ export default function OrdersPage({ navigate, showToast }) {
           const placedIST2 = new Date(placedDate2.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
           const isTodayOrder = placedIST2.toDateString() === nowIST2.toDateString();
           const canCancel = isPlaced && order.payment_status === 'PENDING' && isTodayOrder;
-          const canRate = order.status === 'Picked Up' && !order.rating;
 
           return (
             <div key={order.id} className="order-card" style={{ background: 'white', borderRadius: 'var(--radius-lg)', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid var(--border-light)' }}>
@@ -204,26 +190,6 @@ export default function OrdersPage({ navigate, showToast }) {
                   <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>₹{order.total_price}</span>
                 </div>
               </div>
-
-              {ratingState.id === order.id && (
-                <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg)', borderRadius: 'var(--radius)' }}>
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '12px' }}>
-                    {[1,2,3,4,5].map(s => (
-                      <span key={s} onClick={() => setRatingState(prev => ({ ...prev, stars: s }))} style={{ cursor: 'pointer', fontSize: '1.8rem', color: ratingState.stars >= s ? '#FC8019' : '#ddd' }}>★</span>
-                    ))}
-                  </div>
-                  <textarea
-                    placeholder="How was your experience?"
-                    value={ratingState.review}
-                    onChange={e => setRatingState(prev => ({ ...prev, review: e.target.value }))}
-                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: '12px', resize: 'none' }}
-                  />
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setRatingState({ id: null, stars: 5, review: '' })} style={{ flex: 1, padding: '10px', background: '#eee', border: 'none', borderRadius: 'var(--radius)', fontWeight: 600 }}>Cancel</button>
-                    <button onClick={() => submitRating(order.id)} className="btn btn-primary" style={{ flex: 2, padding: '10px' }}>Submit</button>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}

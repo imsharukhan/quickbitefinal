@@ -163,14 +163,22 @@ export default function MenuPage({ outlet, navigate, showToast }) {
                 >
                   {/* Image circle or All pill */}
                   {cat === 'All' ? (
-                    <div style={{
-                      padding: '7px 20px', borderRadius: 'var(--radius-full)',
-                      border: `1.5px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`,
-                      background: isActive ? 'var(--primary)' : 'var(--bg-white)',
-                      color: isActive ? 'white' : 'var(--text-secondary)',
-                      fontWeight: isActive ? 700 : 500, fontSize: '0.82rem',
-                      whiteSpace: 'nowrap',
-                    }}>All</div>
+                    <>
+                      <div style={{
+                        height: '58px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <div style={{
+                          padding: '7px 20px', borderRadius: 'var(--radius-full)',
+                          border: `1.5px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`,
+                          background: isActive ? 'var(--primary)' : 'var(--bg-white)',
+                          color: isActive ? 'white' : 'var(--text-secondary)',
+                          fontWeight: isActive ? 700 : 500, fontSize: '0.82rem',
+                          whiteSpace: 'nowrap',
+                        }}>All</div>
+                      </div>
+                      <span style={{ fontSize: '0.7rem', color: 'transparent' }}>All</span>
+                    </>
                   ) : (
                     <>
                       <div style={{
