@@ -11,6 +11,13 @@ const RAZORPAY_RATE = 0.0236;
 
 export default function CartPage({ navigate, showToast }) {
   const { cart, removeFromCart, updateCartQuantity, cartTotal, grandTotal, placeOrder, clearCart, isSubmittingRef, refreshAfterPayment, processingFee } = useApp();
+
+  const getCategoryImg = (catName) => {
+    if (!catName) return null;
+    const clean = catName.toLowerCase().replace(/ & /g, '_').replace(/ /g, '_');
+    const valid = ['breakfast', 'rice_meals', 'breads_rotis', 'snacks_starters', 'desserts_sweets', 'drinks_beverages'];
+    return valid.includes(clean) ? `/categories/${clean}.png` : '/categories/other.png';
+  };
   const { user } = useAuth();
 
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -140,7 +147,16 @@ export default function CartPage({ navigate, showToast }) {
   };
 
   /* ─── EMPTY CART ─── */
-  if (cart.length === 0 && !paymentLoading) {
+  if (cart.length === 0) {
+    if (paymentLoading) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70vh', gap: '16px' }}>
+          <div className="qb-spinner" style={{ width: '36px', height: '36px', border: '3px solid rgba(0,0,0,0.08)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', fontWeight: 600 }}>Processing your payment...</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Please don't close this page</p>
+        </div>
+      );
+    }
     return (
       <div className="empty-state">
         <div className="empty-icon">🛒</div>
@@ -197,7 +213,9 @@ export default function CartPage({ navigate, showToast }) {
             <div className="qb-item-img">
               {item.image_url
                 ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} />
-                : <span>{item.is_veg ? '🥗' : '🍗'}</span>
+                : getCategoryImg(item.category)
+                  ? <img src={getCategoryImg(item.category)} alt={item.category} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='flex'; }} />
+                  : <span>{item.is_veg ? '🥗' : '🍗'}</span>
               }
             </div>
             <div className="qb-item-info">

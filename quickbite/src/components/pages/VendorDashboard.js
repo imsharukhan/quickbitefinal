@@ -120,7 +120,6 @@ export default function VendorDashboard({ showToast }) {
             if (currentStatus === 'Placed') {
                 const updatedOrder = await orderSvc.confirmPayment(orderId);
                 setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-                setFilterStatus('Preparing');
                 
                 // Fetch stats Live
                 orderSvc.getOutletStats(selectedOutlet.id).then(sData => {
