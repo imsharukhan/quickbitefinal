@@ -41,7 +41,8 @@ async def get_daily_token(db: AsyncSession, outlet_id: str) -> int:
 
 def generate_idempotency_key(user_id: str, outlet_id: str, pickup_time: str, items: list) -> str:
     sorted_items = sorted(items, key=lambda x: x.menu_item_id)
-    data = f"{user_id}{outlet_id}{pickup_time}{json.dumps([i.model_dump() for i in sorted_items])}"
+    today = datetime.now(IST).strftime("%Y-%m-%d")  # date included — different day = different key
+    data = f"{user_id}{outlet_id}{pickup_time}{today}{json.dumps([i.model_dump() for i in sorted_items])}"
     return hashlib.md5(data.encode()).hexdigest()
 
 def get_upi_deep_link(outlet: Outlet, order: Order) -> str:

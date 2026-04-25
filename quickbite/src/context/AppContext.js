@@ -3,15 +3,13 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import * as orderService from '../services/orderService';
 import * as notificationService from '../services/notificationService';
 import { useAuth } from './AuthContext';
-import { useWebSocket } from '../hooks/useWebSocket';
 
 const AppContext = createContext();
 
 const RAZORPAY_RATE = 0.0236; // 2% + 18% GST
 
 export function AppProvider({ children }) {
-    const { isLoggedIn, user, role } = useAuth();
-    const { lastMessage } = useWebSocket(role === 'vendor' ? null : 'student', user?.id);
+    const { isLoggedIn } = useAuth();
 
     const [cart, setCart] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -22,30 +20,6 @@ export function AppProvider({ children }) {
     const [isNotifsLoading, setIsNotifsLoading] = useState(false);
     const isSubmittingRef = useRef(false);
     const hasInitialized = useRef(false);
-
-    // Real-time: WebSocket push → instant notification + order update
-    useEffect(() => {
-        if (!lastMessage) return;
-
-        if (lastMessage.type === 'PAYMENT_CONFIRMED' || lastMessage.type === 'STATUS_UPDATE') {
-            // Update order state instantly without full reload
-            setOrders(prev => prev.map(order =>
-                order.id === lastMessage.order_id
-                    ? { ...order, status: lastMessage.status || order.status, payment_status: lastMessage.payment_status || order.payment_status }
-                    : order
-            ));
-            // Fetch fresh notification silently — just the new one
-            notificationService.getNotifications().then(data => {
-                setNotifications(data?.notifications || []);
-            }).catch(() => {});
-        }
-
-        if (lastMessage.type === 'NEW_ORDER') {
-            notificationService.getNotifications().then(data => {
-                setNotifications(data?.notifications || []);
-            }).catch(() => {});
-        }
-    }, [lastMessage]);
 
     useEffect(() => {
         try {

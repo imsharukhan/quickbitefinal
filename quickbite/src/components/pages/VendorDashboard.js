@@ -64,8 +64,21 @@ export default function VendorDashboard({ showToast }) {
     useEffect(() => {
         if (!user) return;
         loadOutlets();
-        // No interval — WebSocket handles real-time. Manual refresh button exists.
-    }, [user]);
+        // Silent background sync every 30s — does NOT trigger loading state
+        // Needed because vendor WebSocket uses outlet_id key but connects via vendor_id
+        const interval = setInterval(async () => {
+            if (!selectedOutlet) return;
+            try {
+                const [oData, sData] = await Promise.all([
+                    orderSvc.getOutletOrders(selectedOutlet.id),
+                    orderSvc.getOutletStats(selectedOutlet.id).catch(() => null),
+                ]);
+                setOrders(oData || []);
+                if (sData) setStats(sData);
+            } catch (_) {}
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [user, selectedOutlet?.id]);
  
     const loadOutletData = async () => {
         if (!selectedOutlet) return;
