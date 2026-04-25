@@ -195,7 +195,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://quickbitefinal.vercel.app",
-        *(["http://localhost:3000", "http://localhost:3001"] if settings.DEBUG else []),
+        "http://localhost:3000",
+        "http://localhost:3001",
     ],
     allow_credentials=True,
     allow_methods=["*"],
