@@ -271,7 +271,7 @@ export default function VendorDashboard({ showToast }) {
     const previewImg = getCategoryImg(newItem.category);
  
     return (
-        <div style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 12px 40px' }}>
+        <div style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 8px 40px', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
  
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -287,7 +287,7 @@ export default function VendorDashboard({ showToast }) {
             </div>
  
             {/* Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginBottom: '20px' }}>
                 {[
                     { label: 'Today', value: stats.orders_today || 0, color: 'var(--primary)' },
                     { label: 'Active', value: stats.active_orders || 0, color: 'var(--blue)' },
@@ -345,7 +345,7 @@ export default function VendorDashboard({ showToast }) {
             ) : activeTab === 'orders' ? (
                 <>
                     {/* Token search bar */}
-                    <div style={{ position: 'relative', marginBottom: '12px' }}>
+                    <div style={{ position: 'relative', marginBottom: '12px', width: '100%', boxSizing: 'border-box' }}>
                         <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
                         <input
                             type="number"
@@ -367,7 +367,7 @@ export default function VendorDashboard({ showToast }) {
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '12px', scrollbarWidth: 'none' }}>
+                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '12px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
                         {[{ l: 'All', v: 'all' }, { l: 'New', v: 'Placed' }, { l: 'Preparing', v: 'Preparing' }, { l: 'Ready', v: 'Ready for Pickup' }, { l: 'Done', v: 'Picked Up' }].map(f => (
                             <button key={f.v} onClick={() => setFilterStatus(f.v)}
                                 style={{
@@ -402,6 +402,7 @@ export default function VendorDashboard({ showToast }) {
                                     <div key={order.id} style={{
                                         background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)',
                                         border: '1px solid var(--border-light)', overflow: 'hidden', boxShadow: 'var(--shadow)',
+                                        width: '100%', boxSizing: 'border-box',
                                     }}>
                                         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -409,10 +410,10 @@ export default function VendorDashboard({ showToast }) {
                                                     <div style={{ fontSize: '0.55rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase' }}>Token</div>
                                                     <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--primary)', lineHeight: 1 }}>#{order.token_number || '—'}</div>
                                                 </div>
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.student_name || 'Student'}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Reg: {order.student_register_number || '—'}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>⏰ {order.pickup_time || 'ASAP'}</div>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.student_name || 'Student'}</div>
+                                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Reg: {order.student_register_number || '—'}</div>
+                                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>⏰ {order.pickup_time || 'ASAP'}</div>
                                                 </div>
                                             </div>
                                             <div style={{
@@ -860,18 +861,18 @@ export default function VendorDashboard({ showToast }) {
                                 <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0, marginTop: '2px' }}>🕐</div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '10px' }}>Operating Hours</div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginBottom: '10px' }}>
                                         <div>
                                             <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Opening</label>
                                             <input type="time" value={outletForm.opening_time}
                                                 onChange={e => setOutletForm({ ...outletForm, opening_time: e.target.value })}
-                                                style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                                                style={{ width: '100%', padding: '8px 4px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.78rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)', minWidth: 0 }} />
                                         </div>
                                         <div>
                                             <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Closing</label>
                                             <input type="time" value={outletForm.closing_time}
                                                 onChange={e => setOutletForm({ ...outletForm, closing_time: e.target.value })}
-                                                style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                                                style={{ width: '100%', padding: '8px 4px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.78rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)', minWidth: 0 }} />
                                         </div>
                                     </div>
                                     <button onClick={handleSaveOutlet} style={{
