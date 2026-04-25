@@ -64,8 +64,7 @@ export default function VendorDashboard({ showToast }) {
     useEffect(() => {
         if (!user) return;
         loadOutlets();
-        const interval = setInterval(loadOutlets, 60000);
-        return () => clearInterval(interval);
+        // No interval — WebSocket handles real-time. Manual refresh button exists.
     }, [user]);
  
     const loadOutletData = async () => {

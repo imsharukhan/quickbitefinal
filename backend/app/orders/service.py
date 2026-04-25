@@ -52,14 +52,25 @@ def get_upi_deep_link(outlet: Outlet, order: Order) -> str:
 async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     key = generate_idempotency_key(user_id, data.outlet_id, data.pickup_time, data.items)
     existing_id = redis_client.get(f"idempotency:{key}")
-    
+
     if existing_id:
         existing_id = str(existing_id)
         result = await db.execute(select(Order).where(Order.id == existing_id))
         order = result.scalars().first()
         if order and order.status not in ["Cancelled", "FAILED"]:
             return order
-        # Cancelled order — fall through and create a fresh one
+
+    # Also check DB directly in case Redis expired but order exists
+    db_existing = await db.execute(
+        select(Order).where(
+            Order.idempotency_key == key,
+            Order.status.not_in(["Cancelled", "FAILED"])
+        )
+    )
+    existing_order = db_existing.scalars().first()
+    if existing_order:
+        redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
+        return existing_order
 
     result = await db.execute(select(Outlet).where(Outlet.id == data.outlet_id))
     outlet = result.scalars().first()
@@ -117,7 +128,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     await db.commit()
     await db.refresh(order)
     
-    redis_client.set(f"idempotency:{key}", order.id, ex=30)
+    redis_client.set(f"idempotency:{key}", order.id, ex=300)
     return order
 
 async def format_order_response(db: AsyncSession, order: Order) -> dict:
