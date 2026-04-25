@@ -75,13 +75,13 @@ export default function HomePage({ navigate }) {
       (o.cuisine || '').toLowerCase().includes(search.toLowerCase());
     const matchFilter =
       activeFilter === 'All' ? true :
-      activeFilter === 'Open Now' ? o.is_open :
-      activeFilter === 'Closed' ? !o.is_open : true;
+      activeFilter === 'Open Now' ? isOutletEffectivelyOpen(o) :
+      activeFilter === 'Closed' ? !isOutletEffectivelyOpen(o) : true;
     return matchSearch && matchFilter;
   });
 
-  const openOutlets = filtered.filter(o => o.is_open);
-  const closedOutlets = filtered.filter(o => !o.is_open);
+  const openOutlets = filtered.filter(o => isOutletEffectivelyOpen(o));
+  const closedOutlets = filtered.filter(o => !isOutletEffectivelyOpen(o));
 
   return (
     <div className="page-container animate-fade-in" style={{ paddingTop: '80px' }}>
@@ -232,6 +232,17 @@ export default function HomePage({ navigate }) {
   );
 }
 
+function isOutletEffectivelyOpen(outlet) {
+  if (!outlet.is_open) return false; // vendor manually closed
+  if (!outlet.opening_time || !outlet.closing_time) return outlet.is_open;
+  const nowIST = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
+  const [nowH, nowM] = nowIST.split(':').map(Number);
+  const nowMins = nowH * 60 + nowM;
+  const [openH, openM] = outlet.opening_time.split(':').map(Number);
+  const [closeH, closeM] = outlet.closing_time.split(':').map(Number);
+  return nowMins >= openH * 60 + openM && nowMins < closeH * 60 + closeM;
+}
+
 function OutletCard({ outlet, onClick }) {
   const handleMouseEnter = (e) => {
     e.currentTarget.style.transform = 'scale(1.02)';
@@ -273,7 +284,7 @@ function OutletCard({ outlet, onClick }) {
             {outlet.name.charAt(0)}
           </div>
         )}
-        {!outlet.is_open && (
+        {!isOutletEffectivelyOpen(outlet) && (
            <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, backdropFilter: 'blur(4px)' }}>
              🔴 Closed
            </div>
@@ -289,9 +300,9 @@ function OutletCard({ outlet, onClick }) {
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             🕐 {outlet.opening_time ? `${formatTime(outlet.opening_time)} – ${formatTime(outlet.closing_time)}` : 'Timings'}
           </span>
-          <span style={{ color: outlet.is_open ? 'var(--green)' : 'var(--red)', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: outlet.is_open ? 'var(--green)' : 'var(--red)' }}></span>
-            {outlet.is_open ? 'Open' : 'Closed'}
+          <span style={{ color: isOutletEffectivelyOpen(outlet) ? 'var(--green)' : 'var(--red)', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isOutletEffectivelyOpen(outlet) ? 'var(--green)' : 'var(--red)' }}></span>
+            {isOutletEffectivelyOpen(outlet) ? 'Open' : 'Closed'}
           </span>
         </div>
       </div>

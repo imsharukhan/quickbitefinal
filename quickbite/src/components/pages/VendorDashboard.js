@@ -315,7 +315,7 @@ export default function VendorDashboard({ showToast }) {
  
             {/* Tabs */}
             <div className="dashboard-tabs">
-                {['orders', 'history', 'menu', 'outlet', 'profile'].map(tab => (
+                {['orders', 'history', 'menu', 'profile'].map(tab => (
                     <div key={tab} className={`dashboard-tab ${activeTab === tab ? 'active' : ''}`}
                         onClick={async () => {
                             setActiveTab(tab);
@@ -332,7 +332,7 @@ export default function VendorDashboard({ showToast }) {
                             }
                         }}
                         style={{ textTransform: 'capitalize', flex: 1, textAlign: 'center' }}>
-                        {tab === 'orders' ? '📋' : tab === 'history' ? '📅' : tab === 'menu' ? '🍽️' : tab === 'outlet' ? '🏪' : '👤'}
+                        {tab === 'orders' ? '📋' : tab === 'history' ? '📅' : tab === 'menu' ? '🍽️' : '👤'}
                     </div>
                 ))}
             </div>
@@ -804,49 +804,9 @@ export default function VendorDashboard({ showToast }) {
                         </div>
                     )}
                 </div>
-            ) : activeTab === 'outlet' ? (
-                <div style={{ background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)', overflow: 'hidden' }}>
-                    <div style={{ padding: '20px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: '1rem' }}>{selectedOutlet?.name}</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{selectedOutlet?.cuisine} • ⭐ {selectedOutlet?.rating || '—'}</div>
-                        </div>
-                        <button onClick={handleToggleOutlet}
-                            style={{ padding: '10px 20px', borderRadius: 'var(--radius)', border: 'none', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', background: selectedOutlet?.is_open ? 'var(--green-bg)' : 'var(--red-bg)', color: selectedOutlet?.is_open ? 'var(--green)' : 'var(--red)' }}>
-                            {selectedOutlet?.is_open ? '🟢 OPEN' : '🔴 CLOSED'}
-                        </button>
-                    </div>
-                    <div style={{ padding: '20px' }}>
-                        <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>Outlet Settings</h3>
-                        <div style={{ marginBottom: '12px' }}>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>UPI ID *</label>
-                            <input type="text" placeholder="merchant@upi" value={outletForm.upi_id}
-                                onChange={e => setOutletForm({ ...outletForm, upi_id: e.target.value })}
-                                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.875rem', boxSizing: 'border-box', outline: 'none' }} />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                            <div>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Opening</label>
-                                <input type="time" value={outletForm.opening_time}
-                                    onChange={e => setOutletForm({ ...outletForm, opening_time: e.target.value })}
-                                    style={{ width: '100%', padding: '10px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.875rem', boxSizing: 'border-box', outline: 'none' }} />
-                            </div>
-                            <div>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Closing</label>
-                                <input type="time" value={outletForm.closing_time}
-                                    onChange={e => setOutletForm({ ...outletForm, closing_time: e.target.value })}
-                                    style={{ width: '100%', padding: '10px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.875rem', boxSizing: 'border-box', outline: 'none' }} />
-                            </div>
-                        </div>
-
-                        <button onClick={handleSaveOutlet}
-                            style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
-                            Save Settings
-                        </button>
-                    </div>
-                </div>
             ) : activeTab === 'profile' ? (
                 <div>
+                    {/* Profile card */}
                     <div style={{ background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)', overflow: 'hidden', marginBottom: '16px' }}>
                         <div style={{ background: 'var(--primary)', padding: '28px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                             <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
@@ -858,22 +818,79 @@ export default function VendorDashboard({ showToast }) {
                             </div>
                         </div>
                         <div style={{ padding: '20px' }}>
-                            {[
-                                { label: 'Outlet Name', value: selectedOutlet?.name || '—', icon: '🏪' },
-                                { label: 'Cuisine', value: selectedOutlet?.cuisine || '—', icon: '🍽️' },
-                                { label: 'UPI ID', value: selectedOutlet?.upi_id || 'Not set', icon: '💳' },
-                                { label: 'Outlet Status', value: selectedOutlet?.is_open ? 'Open 🟢' : 'Closed 🔴', icon: '📍' },
-                                { label: 'Hours', value: selectedOutlet ? `${selectedOutlet.opening_time} – ${selectedOutlet.closing_time}` : '—', icon: '🕐' },
-                                { label: 'Menu Items', value: 'Unlimited', icon: '📋' },
-                            ].map((row, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: i < 5 ? '1px solid var(--border-light)' : 'none'}}>
-                                    <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>{row.icon}</div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{row.label}</div>
-                                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{row.value}</div>
+
+                            {/* Outlet Name */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
+                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>🏪</div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Outlet Name</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{selectedOutlet?.name || '—'}</div>
+                                </div>
+                            </div>
+
+                            {/* UPI ID */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
+                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>💳</div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>UPI ID</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{selectedOutlet?.upi_id || '—'}</div>
+                                </div>
+                            </div>
+
+                            {/* Outlet Status — toggle button */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
+                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>📍</div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Outlet Status</div>
+                                    <div style={{ marginTop: '8px' }}>
+                                        <button onClick={handleToggleOutlet} style={{
+                                            padding: '8px 20px', borderRadius: 'var(--radius)', border: 'none',
+                                            fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer',
+                                            background: selectedOutlet?.is_open ? 'var(--green-bg)' : 'var(--red-bg)',
+                                            color: selectedOutlet?.is_open ? 'var(--green)' : 'var(--red)',
+                                        }}>
+                                            {selectedOutlet?.is_open ? '🟢 OPEN — tap to close' : '🔴 CLOSED — tap to open'}
+                                        </button>
                                     </div>
                                 </div>
-                            ))}
+                            </div>
+
+                            {/* Hours — editable */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
+                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0, marginTop: '2px' }}>🕐</div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '10px' }}>Operating Hours</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Opening</label>
+                                            <input type="time" value={outletForm.opening_time}
+                                                onChange={e => setOutletForm({ ...outletForm, opening_time: e.target.value })}
+                                                style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Closing</label>
+                                            <input type="time" value={outletForm.closing_time}
+                                                onChange={e => setOutletForm({ ...outletForm, closing_time: e.target.value })}
+                                                style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                                        </div>
+                                    </div>
+                                    <button onClick={handleSaveOutlet} style={{
+                                        padding: '8px 18px', borderRadius: 'var(--radius)', border: 'none',
+                                        background: 'var(--primary)', color: 'white', fontWeight: 700,
+                                        fontSize: '0.82rem', cursor: 'pointer',
+                                    }}>Save Hours</button>
+                                </div>
+                            </div>
+
+                            {/* Menu Items */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>📋</div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Menu Items</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{menu.length} items</div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                     <button onClick={handleLogout}
