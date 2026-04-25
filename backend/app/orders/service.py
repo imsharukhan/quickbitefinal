@@ -462,10 +462,12 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
             )
         )
         revenue_res = await db.execute(
-            select(func.sum(Order.total_price)).where(
+            select(func.sum(OrderItem.price * OrderItem.quantity))
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(
                 Order.outlet_id == outlet_id,
-                Order.status == "Picked Up",
                 Order.payment_status == "COMPLETED",
+                Order.status != "Cancelled",
                 Order.placed_at >= start_utc,
                 Order.placed_at < end_utc
             )

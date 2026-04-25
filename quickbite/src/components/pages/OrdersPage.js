@@ -8,7 +8,7 @@ import { Clock, RefreshCw } from 'lucide-react';
 
 
 export default function OrdersPage({ navigate, showToast }) {
-  const { orders, setOrders, loadOrders, isOrdersLoading, refreshAfterPayment } = useApp();
+  const { orders, setOrders, loadOrders, isOrdersLoading, refreshAfterPayment, loadNotifications } = useApp();
   const visibleOrders = orders.filter(o => o.payment_status !== 'PENDING');
   const [cancelingId, setCancelingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -22,7 +22,7 @@ export default function OrdersPage({ navigate, showToast }) {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'STATUS_UPDATE') {
-      // Instant optimistic update — token banner re-renders immediately
+      // Instant optimistic update
       setOrders(prev => prev.map(order =>
         order.id === lastMessage.order_id
           ? {
@@ -33,14 +33,12 @@ export default function OrdersPage({ navigate, showToast }) {
           : order
       ));
       if (showToast) showToast(lastMessage.message || `Order updated to ${lastMessage.status}!`, 'success');
-
-      // Background reconcile — fetch fresh data silently so everything is accurate
-      setTimeout(() => loadOrders(), 800);
+      // Refresh both orders and notifications silently
+      setTimeout(() => { loadOrders(); loadNotifications(); }, 600);
     }
 
     if (lastMessage.type === 'PAYMENT_CONFIRMED') {
-      // Payment just confirmed — refresh fully so token number appears
-      setTimeout(() => loadOrders(), 500);
+      setTimeout(() => { loadOrders(); loadNotifications(); }, 400);
       if (showToast) showToast(lastMessage.message || 'Payment confirmed! 🎉', 'success');
     }
   }, [lastMessage]);

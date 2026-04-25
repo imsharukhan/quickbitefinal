@@ -323,12 +323,11 @@ export default function VendorDashboard({ showToast }) {
                                 setHistoryData([]);
                                 setHistoryLoading(true);
                                 try {
-                                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
-                                    const data = await Promise.race([orderSvc.getOutletHistory(selectedOutlet.id), timeout]);
-                                    setHistoryData(data);
+                                    const data = await orderSvc.getOutletHistory(selectedOutlet.id);
+                                    setHistoryData(Array.isArray(data) ? data : []);
                                 } catch (e) {
-                                    showToast(e.message === 'timeout' ? 'History is taking too long — try again' : 'Failed to load history', 'error');
-                                    setHistoryData([]);
+                                    console.error('History fetch failed:', e);
+                                    setHistoryData(null); // null = error state
                                 } finally { setHistoryLoading(false); }
                             }
                         }}
@@ -487,6 +486,28 @@ export default function VendorDashboard({ showToast }) {
                     {historyLoading ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {[1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: '64px', borderRadius: 'var(--radius)' }} />)}
+                        </div>
+                    ) : historyData === null ? (
+                        <div className="empty-state" style={{ padding: '40px 20px' }}>
+                            <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⚠️</div>
+                            <h3>Failed to load history</h3>
+                            <p>Check your connection and try again</p>
+                            <button onClick={async () => {
+                                setHistoryLoading(true);
+                                try {
+                                    const data = await orderSvc.getOutletHistory(selectedOutlet.id);
+                                    setHistoryData(Array.isArray(data) ? data : []);
+                                } catch { setHistoryData(null); }
+                                finally { setHistoryLoading(false); }
+                            }} style={{ marginTop: '14px', padding: '8px 20px', borderRadius: 'var(--radius)', border: '1px solid var(--primary)', background: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}>
+                                Retry
+                            </button>
+                        </div>
+                    ) : historyData.length === 0 ? (
+                        <div className="empty-state" style={{ padding: '40px 20px' }}>
+                            <div style={{ fontSize: '2rem', marginBottom: '12px', opacity: 0.4 }}>📅</div>
+                            <h3>No history yet</h3>
+                            <p>Orders will appear here once placed</p>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
