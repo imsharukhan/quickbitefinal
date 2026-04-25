@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 from app.payments.router import router as payments_router
+from app.config import settings
 from app.database import create_tables
 from app.users.models import User, Student
 from app.vendors.models import Vendor
