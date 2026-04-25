@@ -116,28 +116,35 @@ export default function VendorDashboard({ showToast }) {
 
     const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         setActionLoading(orderId);
+
+        // Optimistic update — instant UI change before API responds
+        setOrders(prev => prev.map(o => {
+            if (o.id !== orderId) return o;
+            if (currentStatus === 'Placed') return { ...o, status: 'Preparing', payment_confirmed_by_vendor: true };
+            return { ...o, status: newStatus };
+        }));
+        setActionLoading(null); // release button immediately
+
         try {
             if (currentStatus === 'Placed') {
                 const updatedOrder = await orderSvc.confirmPayment(orderId);
+                // Reconcile with real server response
                 setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-                
-                // Fetch stats Live
-                orderSvc.getOutletStats(selectedOutlet.id).then(sData => {
-                    if (sData) {
-                        setStats(sData);
-                    }
-                }).catch(() => {});
                 showToast('Payment Confirmed!', 'success');
+                // Background stats refresh — non-blocking
+                orderSvc.getOutletStats(selectedOutlet.id)
+                    .then(sData => { if (sData) setStats(sData); })
+                    .catch(() => {});
             } else {
                 const updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
                 setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
                 showToast('Order updated ✅');
             }
-            
-            // Background sync
-            loadOutletData();
-        } catch (e) { showToast('Failed to update order', 'error'); }
-        finally { setActionLoading(null); }
+        } catch (e) {
+            // Revert optimistic update on failure
+            showToast('Failed to update order', 'error');
+            loadOutletData(); // re-sync to correct state
+        }
     };
  
     const handleCancelOrder = async (orderId) => {

@@ -19,15 +19,31 @@ export default function OrdersPage({ navigate, showToast }) {
   const { lastMessage } = useWebSocket('student', user?.id);
 
   useEffect(() => {
-    if (lastMessage?.type === 'STATUS_UPDATE') {
-      setOrders(prev => prev.map(order => 
-        order.id === lastMessage.order_id 
-          ? { ...order, status: lastMessage.status, payment_status: lastMessage.payment_status || order.payment_status } 
+    if (!lastMessage) return;
+
+    if (lastMessage.type === 'STATUS_UPDATE') {
+      // Instant optimistic update — token banner re-renders immediately
+      setOrders(prev => prev.map(order =>
+        order.id === lastMessage.order_id
+          ? {
+              ...order,
+              status: lastMessage.status,
+              payment_status: lastMessage.payment_status || order.payment_status,
+            }
           : order
       ));
-      if (showToast) showToast(lastMessage.message || `Order status updated to ${lastMessage.status}!`, 'success');
+      if (showToast) showToast(lastMessage.message || `Order updated to ${lastMessage.status}!`, 'success');
+
+      // Background reconcile — fetch fresh data silently so everything is accurate
+      setTimeout(() => loadOrders(), 800);
     }
-  }, [lastMessage]); // Removed unstable dependencies to prevent network storms
+
+    if (lastMessage.type === 'PAYMENT_CONFIRMED') {
+      // Payment just confirmed — refresh fully so token number appears
+      setTimeout(() => loadOrders(), 500);
+      if (showToast) showToast(lastMessage.message || 'Payment confirmed! 🎉', 'success');
+    }
+  }, [lastMessage]);
 
   const generateUpiLink = (order) => {
     const upiId = order.outlet_upi_id || 'sharukhansharukhan926@oksbi';

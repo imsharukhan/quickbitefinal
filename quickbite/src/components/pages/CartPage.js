@@ -28,6 +28,9 @@ export default function CartPage({ navigate, showToast }) {
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // Preload Razorpay script the moment cart page opens — not when they click
+  useEffect(() => { loadRazorpayScript(); }, []);
   const activeOrderIdRef = useRef(null);
   const paymentDoneRef = useRef(false);
 
@@ -95,7 +98,7 @@ export default function CartPage({ navigate, showToast }) {
     setPaymentLoading(true);
 
     try {
-      const scriptLoaded = await loadRazorpayScript();
+      const scriptLoaded = window.Razorpay ? true : await loadRazorpayScript();
       if (!scriptLoaded) {
         showToast('Failed to load payment gateway. Please try again.', 'error');
         setLoading(false);
