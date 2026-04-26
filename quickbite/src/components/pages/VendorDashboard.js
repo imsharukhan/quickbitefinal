@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import * as outletManagementService from '@/services/outletManagementService';
 import * as orderSvc from '@/services/orderService';
@@ -47,6 +47,7 @@ export default function VendorDashboard({ showToast }) {
     const [outletForm, setOutletForm] = useState({ upi_id: '', opening_time: '', closing_time: '' });
     const [historyData, setHistoryData] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const historyCache = useRef({});
     const [expandedDate, setExpandedDate] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState([]);
     const [expandedLoading, setExpandedLoading] = useState(false);
@@ -271,7 +272,7 @@ export default function VendorDashboard({ showToast }) {
     const previewImg = getCategoryImg(newItem.category);
  
     return (
-        <div style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 8px 40px', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
+        <div style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 12px 40px', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
  
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -320,15 +321,25 @@ export default function VendorDashboard({ showToast }) {
                         onClick={async () => {
                             setActiveTab(tab);
                             if (tab === 'history' && selectedOutlet) {
-                                setHistoryData([]);
-                                setHistoryLoading(true);
-                                try {
-                                    const data = await orderSvc.getOutletHistory(selectedOutlet.id);
-                                    setHistoryData(Array.isArray(data) ? data : []);
-                                } catch (e) {
-                                    console.error('History fetch failed:', e);
-                                    setHistoryData(null); // null = error state
-                                } finally { setHistoryLoading(false); }
+                                // Show cached data instantly if available
+                                const cacheKey = selectedOutlet.id;
+                                const cached = historyCache.current[cacheKey];
+                                if (cached && Date.now() - cached.time < 120000) {
+                                    // Cache valid for 2 mins — instant display
+                                    setHistoryData(cached.data);
+                                } else {
+                                    setHistoryData([]);
+                                    setHistoryLoading(true);
+                                    try {
+                                        const data = await orderSvc.getOutletHistory(selectedOutlet.id);
+                                        const result = Array.isArray(data) ? data : [];
+                                        historyCache.current[cacheKey] = { data: result, time: Date.now() };
+                                        setHistoryData(result);
+                                    } catch (e) {
+                                        console.error('History fetch failed:', e);
+                                        setHistoryData(null);
+                                    } finally { setHistoryLoading(false); }
+                                }
                             }
                         }}
                         style={{ textTransform: 'capitalize', flex: 1, textAlign: 'center' }}>
@@ -823,18 +834,18 @@ export default function VendorDashboard({ showToast }) {
                             {/* Outlet Name */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
                                 <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>🏪</div>
-                                <div style={{ flex: 1 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Outlet Name</div>
-                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{selectedOutlet?.name || '—'}</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedOutlet?.name || '—'}</div>
                                 </div>
                             </div>
 
                             {/* UPI ID */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
                                 <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>💳</div>
-                                <div style={{ flex: 1 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>UPI ID</div>
-                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{selectedOutlet?.upi_id || '—'}</div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{selectedOutlet?.upi_id || '—'}</div>
                                 </div>
                             </div>
 
@@ -886,7 +897,7 @@ export default function VendorDashboard({ showToast }) {
                             {/* Menu Items */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>📋</div>
-                                <div style={{ flex: 1 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Menu Items</div>
                                     <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{menu.length} items</div>
                                 </div>
