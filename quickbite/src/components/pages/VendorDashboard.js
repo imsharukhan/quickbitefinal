@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import * as outletManagementService from '@/services/outletManagementService';
 import * as orderSvc from '@/services/orderService';
 import * as menuMgmt from '@/services/menuManagementService';
+import { invalidateMenuCache } from '@/services/menuService';
 import { useWebSocket } from '@/hooks/useWebSocket';
  
 const MENU_CATEGORIES = [
@@ -57,8 +58,12 @@ export default function VendorDashboard({ showToast }) {
         outletManagementService.getMyOutlets().then(data => {
             const myOutlets = data;
             setOutlets(myOutlets);
-            if (!selectedOutlet && myOutlets.length > 0) setSelectedOutlet(myOutlets[0]);
-            if (myOutlets.length === 0) setLoading(false);
+            if (myOutlets.length === 0) { setLoading(false); return; }
+            
+            // Restore previously selected outlet — prevents flicker on refresh
+            const savedId = typeof window !== 'undefined' ? localStorage.getItem('qb_selected_outlet') : null;
+            const toSelect = savedId ? (myOutlets.find(o => o.id === savedId) || myOutlets[0]) : myOutlets[0];
+            if (!selectedOutlet) setSelectedOutlet(toSelect);
         });
     };
     
@@ -94,7 +99,15 @@ export default function VendorDashboard({ showToast }) {
         finally { if (!silent) setLoading(false); }
     };
  
-    useEffect(() => { loadOutletData(); }, [selectedOutlet]);
+    useEffect(() => { 
+        if (selectedOutlet?.id) {
+            loadOutletData();
+            // Persist so refresh restores same outlet instantly
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('qb_selected_outlet', selectedOutlet.id);
+            }
+        }
+    }, [selectedOutlet?.id]);// Only fire when outlet ID changes, not when is_open flips
  
     useEffect(() => {
         if (!lastMessage) return;
@@ -164,14 +177,14 @@ export default function VendorDashboard({ showToast }) {
     };
  
     const handleToggleMenu = async (itemId) => {
-        // Optimistic — flip instantly
         setMenu(prev => prev.map(m => m.id === itemId ? { ...m, is_available: !m.is_available } : m));
+        invalidateMenuCache(selectedOutlet.id); // students see change immediately
         try {
             await menuMgmt.toggleAvailability(itemId);
             showToast('Updated ✅');
         } catch (e) {
-            // Revert on failure
             setMenu(prev => prev.map(m => m.id === itemId ? { ...m, is_available: !m.is_available } : m));
+            invalidateMenuCache(selectedOutlet.id);
             showToast('Failed', 'error');
         }
     };
@@ -200,8 +213,8 @@ export default function VendorDashboard({ showToast }) {
 
         try {
             const added = await menuMgmt.addMenuItem(selectedOutlet.id, { ...savedItem, price: parseFloat(savedItem.price) });
-            // Replace temp item with real one from server
             setMenu(prev => prev.map(m => m.id === tempId ? added : m));
+            invalidateMenuCache(selectedOutlet.id); // students see new item immediately
         } catch (e) {
             // Remove optimistic item on failure
             setMenu(prev => prev.filter(m => m.id !== tempId));
@@ -246,8 +259,8 @@ export default function VendorDashboard({ showToast }) {
         showToast('Item deleted');
         try {
             await menuMgmt.deleteMenuItem(itemId);
+            invalidateMenuCache(selectedOutlet.id); // students see deletion immediately
         } catch (e) {
-            // Restore on failure
             if (deletedItem) setMenu(prev => [...prev, deletedItem]);
             showToast('Failed to delete', 'error');
         }
