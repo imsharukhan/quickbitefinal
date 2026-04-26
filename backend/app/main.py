@@ -13,6 +13,14 @@ from app.orders.models import Order, OrderItem, Rating
 from app.notifications.models import Notification
 from app.auth.utils import hash_password
 from sqlalchemy.future import select
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import sentry_sdk
+sentry_sdk.init(
+    dsn="https://7841a0c62cea33743c8da87c59799739@o4511285444870144.ingest.us.sentry.io/4511285447491584",
+    traces_sample_rate=0.1,
+)
 
 
 async def seed_data():
@@ -190,6 +198,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="QuickBite API", lifespan=lifespan)
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

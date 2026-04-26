@@ -12,6 +12,5 @@ export const updateOrderStatus = (order_id, status) => api.patch(`/api/orders/${
 export const confirmPayment = (order_id) => api.patch(`/api/orders/${order_id}/confirm-payment`, {}).then(res => res.data);
 export const cancelOrder = (order_id, reason) => api.patch(`/api/orders/${order_id}/cancel`, { reason }).then(res => res.data);
 export const cancelOrderVendor = (order_id, reason) => api.patch(`/api/orders/${order_id}/cancel-vendor`, { reason }).then(res => res.data);
-export const rateOrder = (order_id, stars, review) => api.post(`/api/orders/${order_id}/rate`, { rating: stars, review }).then(res => res.data);
 export const getOutletStats = (outlet_id) => api.get(`/api/orders/outlet/${outlet_id}/stats`).then(res => res.data);
 export const getOutletHistory = (outlet_id) => api.get(`/api/orders/outlet/${outlet_id}/history`).then(res => res.data);

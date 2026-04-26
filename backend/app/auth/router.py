@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.redis_client import redis_client
@@ -7,6 +7,7 @@ from app.auth import schemas, service, utils
 from app.auth.dependencies import get_current_user, get_current_vendor, get_current_user_or_vendor
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.auth.dependencies import get_current_user, get_current_vendor, get_current_user_or_vendor
+
 
 security = HTTPBearer()
 router = APIRouter()
@@ -162,7 +163,7 @@ async def reset_password(data: schemas.ResetPassword, db: AsyncSession = Depends
 
 # ── Unified Login (Student + Vendor) ──────────────────────────────────────────
 @router.post("/login", response_model=schemas.TokenResponse)
-async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(request: Request, data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
     identifier = str(data.register_number).strip()
     user = None
     vendor = None
@@ -367,3 +368,7 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security), 
     else:
         redis_client.delete(f"refresh:{user_id}")
     return {"message": "Logged out successfully"}
+
+@router.get("/sentry-test")
+async def sentry_test():
+    raise Exception("Sentry is working for QuickBite!")    

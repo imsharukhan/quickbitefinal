@@ -1,6 +1,6 @@
 'use client';
 import { useApp } from '@/context/AppContext';
-import { ORDER_STATUS } from '@/data/mockData';
+import { ORDER_STATUS } from '@/constants';
 
 export default function BudgetPage({ navigate }) {
     const { orders } = useApp();
