@@ -67,23 +67,15 @@ export default function VendorDashboard({ showToast }) {
         loadOutlets();
         // Silent background sync every 30s — does NOT trigger loading state
         // Needed because vendor WebSocket uses outlet_id key but connects via vendor_id
-        const interval = setInterval(async () => {
-            if (!selectedOutlet) return;
-            try {
-                const [oData, sData] = await Promise.all([
-                    orderSvc.getOutletOrders(selectedOutlet.id),
-                    orderSvc.getOutletStats(selectedOutlet.id).catch(() => null),
-                ]);
-                setOrders(oData || []);
-                if (sData) setStats(sData);
-            } catch (_) {}
+        const interval = setInterval(() => {
+            loadOutletData(true); // fully silent background sync
         }, 30000);
         return () => clearInterval(interval);
     }, [user, selectedOutlet?.id]);
  
-    const loadOutletData = async () => {
+    const loadOutletData = async (silent = false) => {
         if (!selectedOutlet) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const [oData, mData, sData] = await Promise.all([
                 orderSvc.getOutletOrders(selectedOutlet.id),
@@ -99,7 +91,7 @@ export default function VendorDashboard({ showToast }) {
                 closing_time: selectedOutlet.closing_time || '20:00',
             });
         } catch (e) { console.error(e); }
-        finally { setLoading(false); }
+        finally { if (!silent) setLoading(false); }
     };
  
     useEffect(() => { loadOutletData(); }, [selectedOutlet]);
@@ -108,10 +100,10 @@ export default function VendorDashboard({ showToast }) {
         if (!lastMessage) return;
         if (lastMessage.type === 'NEW_ORDER') {
             try { new Audio('/notification.mp3').play().catch(() => {}); } catch (e) {}
-            loadOutletData();
+            loadOutletData(true); // silent — no loading flash
             showToast(`New order! Token #${lastMessage.order?.token_number || '—'}`, 'success');
         } else if (lastMessage.type === 'STATUS_UPDATE') {
-            loadOutletData();
+            loadOutletData(true); // silent — no loading flash
         }
     }, [lastMessage]);
  

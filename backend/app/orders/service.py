@@ -444,47 +444,72 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
         "total_revenue": total_revenue,
         "pending_payment_count": pending_payment_count
     }
+    
 async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
+    from sqlalchemy import case, cast, Date as SADate, text
     today_ist = datetime.now(IST).date()
+    start_30 = today_ist - timedelta(days=29)
+
+    # Convert IST window to UTC for DB query
+    start_utc = IST.localize(datetime(start_30.year, start_30.month, start_30.day)).astimezone(pytz.UTC).replace(tzinfo=None)
+    end_utc = IST.localize(datetime(today_ist.year, today_ist.month, today_ist.day) + timedelta(days=1)).astimezone(pytz.UTC).replace(tzinfo=None)
+
+    # Single query: all orders in 30-day window
+    orders_res = await db.execute(
+        select(
+            Order.id,
+            Order.placed_at,
+            Order.status,
+            Order.payment_status,
+        ).where(
+            Order.outlet_id == outlet_id,
+            Order.placed_at >= start_utc,
+            Order.placed_at < end_utc,
+        )
+    )
+    all_orders = orders_res.fetchall()
+
+    # Single query: revenue per order in window
+    revenue_res = await db.execute(
+        select(
+            OrderItem.order_id,
+            func.sum(OrderItem.price * OrderItem.quantity).label("total")
+        )
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(
+            Order.outlet_id == outlet_id,
+            Order.placed_at >= start_utc,
+            Order.placed_at < end_utc,
+            Order.payment_status == "COMPLETED",
+            Order.status != "Cancelled",
+        )
+        .group_by(OrderItem.order_id)
+    )
+    revenue_by_order = {row.order_id: float(row.total) for row in revenue_res.fetchall()}
+
+    # Group by IST date in Python (fast, no DB round trips)
+    from collections import defaultdict
+    day_map = defaultdict(lambda: {"count": 0, "completed": 0, "revenue": 0.0})
+
+    for order in all_orders:
+        placed_utc = order.placed_at.replace(tzinfo=pytz.UTC) if order.placed_at.tzinfo is None else order.placed_at
+        placed_ist = placed_utc.astimezone(IST).date()
+        day_map[placed_ist]["count"] += 1
+        if order.status == "Picked Up":
+            day_map[placed_ist]["completed"] += 1
+        if order.id in revenue_by_order:
+            day_map[placed_ist]["revenue"] += revenue_by_order[order.id]
+
+    # Build result for all 30 days
     result = []
     for i in range(30):
         target_date = today_ist - timedelta(days=i)
-        start = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
-        end = start + timedelta(days=1)
-        start_utc = start.astimezone(pytz.UTC).replace(tzinfo=None)
-        end_utc = end.astimezone(pytz.UTC).replace(tzinfo=None)
-
-        count_res = await db.execute(
-            select(func.count(Order.id)).where(
-                Order.outlet_id == outlet_id,
-                Order.placed_at >= start_utc,
-                Order.placed_at < end_utc
-            )
-        )
-        revenue_res = await db.execute(
-            select(func.sum(OrderItem.price * OrderItem.quantity))
-            .join(Order, OrderItem.order_id == Order.id)
-            .where(
-                Order.outlet_id == outlet_id,
-                Order.payment_status == "COMPLETED",
-                Order.status != "Cancelled",
-                Order.placed_at >= start_utc,
-                Order.placed_at < end_utc
-            )
-        )
-        completed_res = await db.execute(
-            select(func.count(Order.id)).where(
-                Order.outlet_id == outlet_id,
-                Order.status == "Picked Up",
-                Order.placed_at >= start_utc,
-                Order.placed_at < end_utc
-            )
-        )
+        d = day_map[target_date]
         result.append({
             "date": str(target_date),
             "label": "Today" if i == 0 else target_date.strftime("%d %b %Y"),
-            "order_count": count_res.scalar() or 0,
-            "completed_count": completed_res.scalar() or 0,
-            "revenue": float(revenue_res.scalar() or 0.0),
+            "order_count": d["count"],
+            "completed_count": d["completed"],
+            "revenue": round(d["revenue"], 2),
         })
-    return result
+    return result    
