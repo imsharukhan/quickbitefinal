@@ -490,7 +490,7 @@ export default function VendorDashboard({ showToast }) {
                 </>
             ) : activeTab === 'history' ? (
                 <div>
-                    <div style={{ marginBottom: '16px' }}>
+                    <div style={{ marginBottom: '16px', paddingLeft: '2px' }}>
                         <h2 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '4px' }}>Order History</h2>
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Last 30 days — click any date to see orders</p>
                     </div>
