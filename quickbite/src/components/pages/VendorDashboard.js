@@ -172,11 +172,16 @@ export default function VendorDashboard({ showToast }) {
     };
  
     const handleToggleMenu = async (itemId) => {
+        // Optimistic — flip instantly
+        setMenu(prev => prev.map(m => m.id === itemId ? { ...m, is_available: !m.is_available } : m));
         try {
             await menuMgmt.toggleAvailability(itemId);
-            setMenu(prev => prev.map(m => m.id === itemId ? { ...m, is_available: !m.is_available } : m));
             showToast('Updated ✅');
-        } catch (e) { showToast('Failed', 'error'); }
+        } catch (e) {
+            // Revert on failure
+            setMenu(prev => prev.map(m => m.id === itemId ? { ...m, is_available: !m.is_available } : m));
+            showToast('Failed', 'error');
+        }
     };
  
     const handleSaveNewItem = async () => {
@@ -185,13 +190,31 @@ export default function VendorDashboard({ showToast }) {
         }
         if (isSaving) return;
         setIsSaving(true);
+
+        // Optimistic — add item instantly with temp ID
+        const tempId = `temp_${Date.now()}`;
+        const optimisticItem = {
+            ...newItem,
+            id: tempId,
+            price: parseFloat(newItem.price),
+            is_available: true,
+            outlet_id: selectedOutlet.id,
+        };
+        setMenu(prev => [...prev, optimisticItem]);
+        setShowAddItem(false);
+        const savedItem = { ...newItem };
+        setNewItem({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
+        showToast('Item added ✅');
+
         try {
-            const added = await menuMgmt.addMenuItem(selectedOutlet.id, { ...newItem, price: parseFloat(newItem.price) });
-            setMenu(prev => [...prev, added]);
-            setShowAddItem(false);
-            setNewItem({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
-            showToast('Item added ✅');
+            const added = await menuMgmt.addMenuItem(selectedOutlet.id, { ...savedItem, price: parseFloat(savedItem.price) });
+            // Replace temp item with real one from server
+            setMenu(prev => prev.map(m => m.id === tempId ? added : m));
         } catch (e) {
+            // Remove optimistic item on failure
+            setMenu(prev => prev.filter(m => m.id !== tempId));
+            setShowAddItem(true);
+            setNewItem(savedItem);
             showToast(e?.response?.data?.detail || 'Failed to add item', 'error');
         } finally {
             setIsSaving(false);
@@ -199,28 +222,43 @@ export default function VendorDashboard({ showToast }) {
     };
  
     const handleToggleOutlet = async () => {
+        // Optimistic — flip instantly
+        const newIsOpen = !selectedOutlet.is_open;
+        setSelectedOutlet(prev => ({ ...prev, is_open: newIsOpen }));
+        showToast(`Outlet is now ${newIsOpen ? 'OPEN 🟢' : 'CLOSED 🔴'}`);
         try {
-            const updated = await outletManagementService.toggleOutletOpen(selectedOutlet.id);
-            setSelectedOutlet(prev => ({ ...prev, is_open: updated.is_open }));
-            showToast(`Outlet is now ${updated.is_open ? 'OPEN 🟢' : 'CLOSED 🔴'}`);
-        } catch (e) { showToast('Failed', 'error'); }
+            await outletManagementService.toggleOutletOpen(selectedOutlet.id);
+        } catch (e) {
+            // Revert on failure
+            setSelectedOutlet(prev => ({ ...prev, is_open: !newIsOpen }));
+            showToast('Failed to update status', 'error');
+        }
     };
  
     const handleSaveOutlet = async () => {
+        // Optimistic — update locally first
+        setSelectedOutlet(prev => ({ ...prev, ...outletForm }));
+        showToast('Hours saved ✅');
         try {
             await outletManagementService.updateOutlet(selectedOutlet.id, outletForm);
-            setSelectedOutlet(prev => ({ ...prev, ...outletForm }));
-            showToast('Settings saved ✅');
-        } catch (e) { showToast('Failed to save', 'error'); }
+        } catch (e) {
+            showToast('Failed to save hours', 'error');
+        }
     };
  
     const handleDeleteItem = async (itemId, itemName) => {
         if (!window.confirm(`Delete "${itemName}"? This cannot be undone.`)) return;
+        // Optimistic — remove instantly
+        const deletedItem = menu.find(m => m.id === itemId);
+        setMenu(prev => prev.filter(m => m.id !== itemId));
+        showToast('Item deleted');
         try {
             await menuMgmt.deleteMenuItem(itemId);
-            setMenu(prev => prev.filter(m => m.id !== itemId));
-            showToast('Item deleted');
-        } catch (e) { showToast('Failed to delete', 'error'); }
+        } catch (e) {
+            // Restore on failure
+            if (deletedItem) setMenu(prev => [...prev, deletedItem]);
+            showToast('Failed to delete', 'error');
+        }
     };
  
     const handleLogout = async () => {
