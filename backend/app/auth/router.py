@@ -368,7 +368,4 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security), 
     else:
         redis_client.delete(f"refresh:{user_id}")
     return {"message": "Logged out successfully"}
-
-@router.get("/sentry-test")
-async def sentry_test():
-    raise Exception("Sentry is working for QuickBite!")    
+   
