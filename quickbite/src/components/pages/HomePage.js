@@ -233,7 +233,13 @@ export default function HomePage({ navigate }) {
 }
 
 function isOutletEffectivelyOpen(outlet) {
-  if (!outlet.is_open) return false; // vendor manually closed
+  if (!outlet.is_open) return false;
+
+  // Check holiday/closed dates
+  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); // YYYY-MM-DD
+  if (outlet.closed_dates && outlet.closed_dates.includes(todayIST)) return false;
+
+  // Check operating hours
   if (!outlet.opening_time || !outlet.closing_time) return outlet.is_open;
   const nowIST = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
   const [nowH, nowM] = nowIST.split(':').map(Number);

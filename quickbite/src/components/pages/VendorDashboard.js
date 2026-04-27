@@ -6,6 +6,7 @@ import * as orderSvc from '@/services/orderService';
 import * as menuMgmt from '@/services/menuManagementService';
 import { invalidateMenuCache } from '@/services/menuService';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { updateClosedDates } from '@/services/outletManagementService';
  
 const MENU_CATEGORIES = [
   'Breakfast', 'Rice & Meals', 'Breads & Rotis',
@@ -49,6 +50,8 @@ export default function VendorDashboard({ showToast }) {
     const [historyData, setHistoryData] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const historyCache = useRef({});
+    const [closedDates, setClosedDates] = useState([]);
+    const [newClosedDate, setNewClosedDate] = useState('');
     const [expandedDate, setExpandedDate] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState([]);
     const [expandedLoading, setExpandedLoading] = useState(false);
@@ -59,11 +62,10 @@ export default function VendorDashboard({ showToast }) {
             const myOutlets = data;
             setOutlets(myOutlets);
             if (myOutlets.length === 0) { setLoading(false); return; }
-            
-            // Restore previously selected outlet — prevents flicker on refresh
             const savedId = typeof window !== 'undefined' ? localStorage.getItem('qb_selected_outlet') : null;
             const toSelect = savedId ? (myOutlets.find(o => o.id === savedId) || myOutlets[0]) : myOutlets[0];
-            if (!selectedOutlet) setSelectedOutlet(toSelect);
+            // Always update — refreshes outlet data (like is_open) from server
+            setSelectedOutlet(prev => prev?.id === toSelect.id ? { ...prev, ...toSelect } : toSelect);
         });
     };
     
@@ -90,11 +92,6 @@ export default function VendorDashboard({ showToast }) {
             setOrders(oData || []);
             setMenu(mData || []);
             if (sData) setStats(sData);
-            setOutletForm({
-                upi_id: selectedOutlet.upi_id || '',
-                opening_time: selectedOutlet.opening_time || '08:00',
-                closing_time: selectedOutlet.closing_time || '20:00',
-            });
         } catch (e) { console.error(e); }
         finally { if (!silent) setLoading(false); }
     };
@@ -102,12 +99,19 @@ export default function VendorDashboard({ showToast }) {
     useEffect(() => { 
         if (selectedOutlet?.id) {
             loadOutletData();
-            // Persist so refresh restores same outlet instantly
             if (typeof window !== 'undefined') {
                 localStorage.setItem('qb_selected_outlet', selectedOutlet.id);
             }
+            // Sync closed dates
+            setClosedDates(selectedOutlet.closed_dates || []);
+            // Sync form ONLY when outlet changes — not on every background refresh
+            setOutletForm({
+                upi_id: selectedOutlet.upi_id || '',
+                opening_time: selectedOutlet.opening_time || '08:00',
+                closing_time: selectedOutlet.closing_time || '20:00',
+            });
         }
-    }, [selectedOutlet?.id]);// Only fire when outlet ID changes, not when is_open flips
+    }, [selectedOutlet?.id]);
  
     useEffect(() => {
         if (!lastMessage) return;
@@ -934,6 +938,64 @@ export default function VendorDashboard({ showToast }) {
                                         background: 'var(--primary)', color: 'white', fontWeight: 700,
                                         fontSize: '0.82rem', cursor: 'pointer',
                                     }}>Save Hours</button>
+                                </div>
+                            </div>
+
+                            {/* Holiday / Closed Dates */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
+                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0, marginTop: '2px' }}>📅</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '10px' }}>Holiday / Closed Days</div>
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                                        <input
+                                            type="date"
+                                            value={newClosedDate}
+                                            min={new Date().toISOString().split('T')[0]}
+                                            onChange={e => setNewClosedDate(e.target.value)}
+                                            style={{ flex: 1, padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.82rem', boxSizing: 'border-box', outline: 'none', background: 'var(--bg)', color: 'var(--text)', minWidth: 0 }}
+                                        />
+                                        <button onClick={async () => {
+                                            if (!newClosedDate || closedDates.includes(newClosedDate)) return;
+                                            const updated = [...closedDates, newClosedDate].sort();
+                                            setClosedDates(updated);
+                                            setNewClosedDate('');
+                                            try {
+                                                await updateClosedDates(selectedOutlet.id, updated);
+                                                setSelectedOutlet(prev => ({ ...prev, closed_dates: updated }));
+                                                showToast('Holiday date added ✅');
+                                            } catch {
+                                                setClosedDates(closedDates);
+                                                showToast('Failed to save', 'error');
+                                            }
+                                        }} style={{ padding: '8px 14px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', flexShrink: 0 }}>
+                                            Add
+                                        </button>
+                                    </div>
+                                    {closedDates.length === 0 ? (
+                                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No holidays set. Students can order on all days.</p>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            {closedDates.map(date => (
+                                                <div key={date} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--red-bg)', borderRadius: 'var(--radius)', padding: '6px 10px' }}>
+                                                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--red)' }}>
+                                                        🔴 {new Date(date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </span>
+                                                    <button onClick={async () => {
+                                                        const updated = closedDates.filter(d => d !== date);
+                                                        setClosedDates(updated);
+                                                        try {
+                                                            await updateClosedDates(selectedOutlet.id, updated);
+                                                            setSelectedOutlet(prev => ({ ...prev, closed_dates: updated }));
+                                                            showToast('Date removed ✅');
+                                                        } catch {
+                                                            setClosedDates(closedDates);
+                                                            showToast('Failed', 'error');
+                                                        }
+                                                    }} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>✕</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

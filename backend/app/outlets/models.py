@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
+from sqlalchemy import JSON
 
 class Outlet(Base):
     __tablename__ = "outlets"
@@ -20,3 +21,4 @@ class Outlet(Base):
     closing_time: Mapped[str] = mapped_column(String(5), default="20:00")
     slot_duration_minutes: Mapped[int] = mapped_column(Integer, default=15)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    closed_dates: Mapped[list] = mapped_column(JSON, default=list, nullable=True)
