@@ -9,10 +9,10 @@ export const getMenuByOutlet = async (outlet_id) => {
   }
   const data = await api.get(`/api/menu/${outlet_id}`).then(res => res.data);
   menuCache[outlet_id] = { data, valid: true };
-  // Auto-expire after 60 seconds
+  // FIX: Reduced from 60s to 30s — sold-out status shows to student faster
   setTimeout(() => {
     if (menuCache[outlet_id]) menuCache[outlet_id].valid = false;
-  }, 60000);
+  }, 30000);
   return data;
 };
 

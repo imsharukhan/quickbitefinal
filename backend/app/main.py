@@ -171,6 +171,7 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100)",
         "ALTER TABLE outlets ADD COLUMN IF NOT EXISTS razorpay_account_id VARCHAR(100)",
         "ALTER TABLE outlets ADD COLUMN IF NOT EXISTS closed_dates JSON DEFAULT '[]'",
+        "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE",
     ]
     try:
         from sqlalchemy import text

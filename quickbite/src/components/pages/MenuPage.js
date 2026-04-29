@@ -1,43 +1,89 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '@/context/AppContext';
 import * as menuService from '@/services/menuService';
- 
+
 const CATEGORIES = ['All', 'Breakfast', 'Rice & Meals', 'Breads & Rotis', 'Snacks & Starters', 'Desserts & Sweets', 'Drinks & Beverages', 'Other'];
- 
-// ── Category image map ──────────────────────────────────────────────
-// Place your images inside /public/categories/
+
 const VALID_IMAGES = ['breakfast', 'rice_meals', 'breads_rotis', 'snacks_starters', 'desserts_sweets', 'drinks_beverages'];
 const getCategoryImg = (catName) => {
   if (!catName || catName.toLowerCase() === 'all') return '/categories/other.png';
   const cleanName = catName.toLowerCase().replace(/ & /g, '_').replace(/ /g, '_');
-  return VALID_IMAGES.includes(cleanName) 
-    ? `/categories/${cleanName}.png` 
+  return VALID_IMAGES.includes(cleanName)
+    ? `/categories/${cleanName}.png`
     : '/categories/other.png';
 };
 const FALLBACK_IMAGE = '/categories/other.png';
- 
+
 const CATEGORY_EMOJI = {
   'Breakfast': '🍳', 'Rice & Meals': '🍛', 'Breads & Rotis': '🫓',
   'Snacks & Starters': '🍟', 'Desserts & Sweets': '🍮',
   'Drinks & Beverages': '🥤', 'Other': '🍽️',
 };
- 
+
+// FIX 4: Compute is_open from outlet fields in real-time on frontend
+// This runs every 30s so vendor open/close change reflects without page reload
+function computeOutletOpen(outlet) {
+  if (!outlet) return false;
+  try {
+    // Get current IST time as "HH:MM" string and "YYYY-MM-DD" date string
+    const nowIST = new Date().toLocaleString('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    });
+    // en-CA gives "YYYY-MM-DD, HH:MM:SS" format
+    const [datePart, timePart] = nowIST.split(', ');
+    const timeStr = timePart.substring(0, 5); // "HH:MM"
+    const dateStr = datePart;                 // "YYYY-MM-DD"
+
+    // Check holiday/closed dates
+    if (outlet.closed_dates && outlet.closed_dates.includes(dateStr)) return false;
+
+    // Check operating hours
+    if (outlet.opening_time && outlet.closing_time) {
+      if (timeStr < outlet.opening_time || timeStr > outlet.closing_time) return false;
+    }
+
+    // Finally use the is_open toggle from vendor
+    return outlet.is_open;
+  } catch (e) {
+    return outlet.is_open;
+  }
+}
+
 export default function MenuPage({ outlet, navigate, showToast }) {
   const { cart, addToCart, updateCartQuantity } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
- 
   const [menuError, setMenuError] = useState(false);
+
+  // FIX 4: Live outlet open status — recomputed every 30 seconds
+  const [isOutletOpen, setIsOutletOpen] = useState(() => computeOutletOpen(outlet));
+
+  useEffect(() => {
+    // Recompute immediately when outlet prop changes
+    setIsOutletOpen(computeOutletOpen(outlet));
+
+    // Then refresh every 30 seconds so the open/close badge updates automatically
+    const timer = setInterval(() => {
+      setIsOutletOpen(computeOutletOpen(outlet));
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, [outlet?.id, outlet?.is_open, outlet?.opening_time, outlet?.closing_time, outlet?.closed_dates]);
 
   const fetchMenu = async () => {
     if (!outlet?.id) return;
     setMenuError(false);
     try {
       const data = await menuService.getMenuByOutlet(outlet.id);
-      setMenuItems(data || []);
+      // FIX 2&3: Backend now returns ALL items including sold-out.
+      // Filter out is_deleted items on frontend just in case.
+      setMenuItems((data || []).filter(item => !item.is_deleted));
     } catch (err) {
       console.error(err);
       setMenuError(true);
@@ -45,13 +91,14 @@ export default function MenuPage({ outlet, navigate, showToast }) {
       setLoading(false);
     }
   };
- 
+
   useEffect(() => {
     fetchMenu();
-    const interval = setInterval(fetchMenu, 60000);
+    // FIX 2: Poll every 30s to reflect vendor's sold-out changes faster
+    const interval = setInterval(fetchMenu, 30000);
     return () => clearInterval(interval);
   }, [outlet?.id]);
- 
+
   if (!outlet) {
     return (
       <div className="empty-state" style={{ paddingTop: '100px' }}>
@@ -63,7 +110,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
       </div>
     );
   }
- 
+
   const handleAdd = (item) => {
     const res = addToCart(item, outlet.id, outlet.name);
     if (res?.conflict) {
@@ -74,7 +121,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
       showToast(`${item.name} added to cart! 🛒`);
     }
   };
- 
+
   const filteredItems = menuItems.filter(item => {
     const matchSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -82,10 +129,10 @@ export default function MenuPage({ outlet, navigate, showToast }) {
     const matchCategory = activeCategory === 'All' || item.category === activeCategory;
     return matchSearch && matchCategory;
   });
- 
+
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
- 
+
   return (
     <div style={{
       paddingTop: '60px',
@@ -93,14 +140,13 @@ export default function MenuPage({ outlet, navigate, showToast }) {
       minHeight: '100vh',
       background: 'var(--bg)',
     }}>
- 
+
       {/* Sticky Header */}
       <div style={{
         background: 'var(--bg-white)', borderBottom: '1px solid var(--border)',
         padding: '16px 20px', position: 'sticky', top: '60px', zIndex: 50,
       }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          {/* Outlet Info */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <button onClick={() => navigate('home')} style={{
               width: '36px', height: '36px', borderRadius: 'var(--radius)',
@@ -114,18 +160,19 @@ export default function MenuPage({ outlet, navigate, showToast }) {
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   {outlet.cuisine || 'Campus Canteen'}
                 </span>
+                {/* FIX 4: Uses live isOutletOpen instead of outlet.is_open */}
                 <span style={{
                   fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px',
                   borderRadius: 'var(--radius-full)',
-                  background: outlet.is_open ? 'var(--green-bg)' : 'var(--red-bg)',
-                  color: outlet.is_open ? 'var(--green)' : 'var(--red)',
+                  background: isOutletOpen ? 'var(--green-bg)' : 'var(--red-bg)',
+                  color: isOutletOpen ? 'var(--green)' : 'var(--red)',
+                  transition: 'background 0.3s, color 0.3s',
                 }}>
-                  {outlet.is_open ? '● Open' : '● Closed'}
+                  {isOutletOpen ? '● Open' : '● Closed'}
                 </span>
               </div>
             </div>
           </div>
-          {/* Search */}
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>🔍</span>
             <input
@@ -141,10 +188,10 @@ export default function MenuPage({ outlet, navigate, showToast }) {
           </div>
         </div>
       </div>
- 
+
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '16px 20px' }}>
- 
-        {/* Category Pills with images */}
+
+        {/* Category Pills */}
         {!loading && (
           <div style={{
             display: 'flex', gap: '24px', overflowX: 'auto',
@@ -165,7 +212,6 @@ export default function MenuPage({ outlet, navigate, showToast }) {
                     transition: 'transform 0.2s',
                   }}
                 >
-                  {/* Image circle or All pill */}
                   {cat === 'All' ? (
                     <>
                       <div style={{
@@ -213,7 +259,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
             })}
           </div>
         )}
- 
+
         {/* Loading Skeleton */}
         {loading && (
           <>
@@ -229,8 +275,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
             </div>
           </>
         )}
- 
-        {/* Error */}
+
         {!loading && menuError && (
           <div className="empty-state" style={{ paddingTop: '40px' }}>
             <div className="empty-icon">⚠️</div>
@@ -240,7 +285,6 @@ export default function MenuPage({ outlet, navigate, showToast }) {
           </div>
         )}
 
-        {/* Empty */}
         {!loading && !menuError && filteredItems.length === 0 && (
           <div className="empty-state" style={{ paddingTop: '40px' }}>
             <div className="empty-icon">🍽️</div>
@@ -248,7 +292,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
             <p>{searchQuery ? `No results for "${searchQuery}"` : 'No items in this category yet.'}</p>
           </div>
         )}
- 
+
         {/* Menu Grid */}
         {!loading && filteredItems.length > 0 && (
           <>
@@ -261,16 +305,30 @@ export default function MenuPage({ outlet, navigate, showToast }) {
               {filteredItems.map(item => {
                 const inCart = cart.find(ci => ci.id === item.id);
                 const imgSrc = getCategoryImg(item.category);
+                // FIX 2&3: is_available=false = sold out (greyed, visible, cannot add)
+                // is_deleted=true = never shown (filtered above)
+                const isSoldOut = !item.is_available;
                 return (
                   <div key={item.id} style={{
                     background: 'var(--bg-white)', border: '1px solid var(--border-light)',
                     borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-                    opacity: item.is_available ? 1 : 0.6,
-                    transition: 'box-shadow 0.2s, transform 0.2s',
+                    // Greyed out for sold-out items
+                    opacity: isSoldOut ? 0.55 : 1,
+                    filter: isSoldOut ? 'grayscale(30%)' : 'none',
+                    transition: 'box-shadow 0.2s, transform 0.2s, opacity 0.3s',
                     boxShadow: 'var(--shadow)',
+                    cursor: isSoldOut ? 'default' : 'pointer',
                   }}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    onMouseEnter={e => {
+                      if (!isSoldOut) {
+                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.boxShadow = 'var(--shadow)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
                   >
                     {/* Category image as card header */}
                     <div style={{
@@ -283,7 +341,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
                         onError={e => { e.currentTarget.src = FALLBACK_IMAGE; }}
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       />
-                      {item.is_bestseller && (
+                      {item.is_bestseller && !isSoldOut && (
                         <div style={{
                           position: 'absolute', top: '7px', left: '7px',
                           background: 'var(--primary)', color: 'white',
@@ -291,20 +349,26 @@ export default function MenuPage({ outlet, navigate, showToast }) {
                           borderRadius: 'var(--radius-sm)', textTransform: 'uppercase', letterSpacing: '0.5px',
                         }}>★ BESTSELLER</div>
                       )}
-                      {!item.is_available && (
+                      {/* FIX 2&3: Bold SOLD OUT overlay on image */}
+                      {isSoldOut && (
                         <div style={{
-                          position: 'absolute', top: '7px', right: '7px',
-                          background: 'var(--red)', color: 'white',
-                          fontSize: '0.55rem', fontWeight: 700, padding: '2px 6px',
-                          borderRadius: 'var(--radius-sm)',
-                        }}>SOLD OUT</div>
+                          position: 'absolute', inset: 0,
+                          background: 'rgba(0,0,0,0.45)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{
+                            background: '#222', color: 'white',
+                            fontSize: '0.7rem', fontWeight: 800,
+                            padding: '4px 10px', borderRadius: '6px',
+                            letterSpacing: '1px', textTransform: 'uppercase',
+                          }}>SOLD OUT</span>
+                        </div>
                       )}
                     </div>
- 
+
                     {/* Card Body */}
                     <div style={{ padding: '10px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', marginBottom: '3px' }}>
-                        {/* veg/non-veg indicator */}
                         <div style={{
                           width: '13px', height: '13px', flexShrink: 0, marginTop: '2px',
                           border: `1.5px solid ${item.is_veg ? 'var(--green)' : 'var(--red)'}`,
@@ -321,45 +385,47 @@ export default function MenuPage({ outlet, navigate, showToast }) {
                           {item.name}
                         </h4>
                       </div>
- 
+
                       {item.description && (
                         <p style={{
                           fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: 1.4,
                           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                         }}>{item.description}</p>
                       )}
- 
+
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text)' }}>₹{item.price}</span>
-                        {item.is_available ? (
-                          inCart ? (
-                            <div style={{
-                              display: 'flex', alignItems: 'center',
-                              border: '1.5px solid var(--primary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden',
-                            }}>
-                              <button onClick={() => updateCartQuantity(item.id, inCart.quantity - 1)}
-                                style={{ width: '26px', height: '26px', background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                              <span style={{ width: '22px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary)' }}>{inCart.quantity}</span>
-                              <button onClick={() => updateCartQuantity(item.id, inCart.quantity + 1)}
-                                style={{ width: '26px', height: '26px', background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => handleAdd(item)}
-                              style={{
-                                padding: '5px 14px', borderRadius: 'var(--radius-sm)',
-                                border: '1.5px solid var(--primary)', background: 'white',
-                                color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s',
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.color = 'var(--primary)'; }}
-                            >ADD</button>
-                          )
-                        ) : (
+                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: isSoldOut ? 'var(--text-muted)' : 'var(--text)' }}>
+                          ₹{item.price}
+                        </span>
+                        {/* FIX 2&3: Sold out = greyed disabled button, cannot click */}
+                        {isSoldOut ? (
                           <button disabled style={{
                             padding: '5px 10px', borderRadius: 'var(--radius-sm)',
                             border: '1px solid var(--border)', background: 'var(--bg)',
-                            color: 'var(--text-muted)', fontSize: '0.72rem', cursor: 'not-allowed',
+                            color: 'var(--text-muted)', fontSize: '0.72rem',
+                            cursor: 'not-allowed', fontWeight: 600,
                           }}>Sold Out</button>
+                        ) : inCart ? (
+                          <div style={{
+                            display: 'flex', alignItems: 'center',
+                            border: '1.5px solid var(--primary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden',
+                          }}>
+                            <button onClick={() => updateCartQuantity(item.id, inCart.quantity - 1)}
+                              style={{ width: '26px', height: '26px', background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                            <span style={{ width: '22px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary)' }}>{inCart.quantity}</span>
+                            <button onClick={() => updateCartQuantity(item.id, inCart.quantity + 1)}
+                              style={{ width: '26px', height: '26px', background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => handleAdd(item)}
+                            style={{
+                              padding: '5px 14px', borderRadius: 'var(--radius-sm)',
+                              border: '1.5px solid var(--primary)', background: 'white',
+                              color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.color = 'var(--primary)'; }}
+                          >ADD</button>
                         )}
                       </div>
                     </div>
@@ -370,7 +436,7 @@ export default function MenuPage({ outlet, navigate, showToast }) {
           </>
         )}
       </div>
- 
+
       {/* View Cart Bar */}
       {cartCount > 0 && (
         <>
@@ -398,4 +464,3 @@ export default function MenuPage({ outlet, navigate, showToast }) {
     </div>
   );
 }
- 

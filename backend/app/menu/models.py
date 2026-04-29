@@ -16,5 +16,8 @@ class MenuItem(Base):
     is_veg: Mapped[bool] = mapped_column(Boolean, default=True)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
     is_bestseller: Mapped[bool] = mapped_column(Boolean, default=False)
+    # FIX: Separate "deleted" from "sold out" — is_deleted=True means truly gone,
+    # is_available=False means sold out (visible but greyed, can be toggled back)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

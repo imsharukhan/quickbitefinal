@@ -29,7 +29,6 @@ export default function CartPage({ navigate, showToast }) {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Preload Razorpay script the moment cart page opens — not when they click
   useEffect(() => { loadRazorpayScript(); }, []);
   const activeOrderIdRef = useRef(null);
   const paymentDoneRef = useRef(false);
@@ -47,11 +46,12 @@ export default function CartPage({ navigate, showToast }) {
             if (data?.payment_status === 'COMPLETED') {
               paymentDoneRef.current = true;
               clearCart();
+              // FIX 1: Navigate FIRST — don't wait for refresh to complete
+              navigate('orders');
               showToast('Payment successful! 🎉', 'success');
-              await refreshAfterPayment();
+              refreshAfterPayment(); // runs in background, no await
               setPaymentLoading(false);
               setLoading(false);
-              navigate('orders');
             }
           }
         } catch (_) {}
@@ -60,15 +60,15 @@ export default function CartPage({ navigate, showToast }) {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
+
   useEffect(() => {
     if (cart.length === 0) return;
     const outlet_id = cart[0].outletId;
     setSlotsLoading(true);
-    // Run outlet check and slots in parallel — menu comes from cache instantly
     Promise.all([
       outletService.getOutletById(outlet_id),
       outletService.getAvailableSlots(outlet_id),
-      menuService.getMenuByOutlet(outlet_id), // hits cache from MenuPage — instant
+      menuService.getMenuByOutlet(outlet_id),
     ]).then(([outletData, slotsData, menuData]) => {
       if (!outletData.is_open) {
         setOutletClosed(true);
@@ -77,7 +77,11 @@ export default function CartPage({ navigate, showToast }) {
         let unavailableItem = null;
         for (let item of cart) {
           const apiItem = menuData.find(m => m.id === item.id);
-          if (!apiItem || !apiItem.is_available) { unavailableItem = item.name; break; }
+          // FIX 2&3: Check both existence and availability
+          if (!apiItem || !apiItem.is_available || apiItem.is_deleted) {
+            unavailableItem = item.name;
+            break;
+          }
         }
         if (unavailableItem) {
           setOutletClosed(true);
@@ -130,43 +134,43 @@ export default function CartPage({ navigate, showToast }) {
 
         onSuccess: (razorpayResponse) => {
           setTimeout(async () => {
-          try {
-            showToast('Verifying payment...', 'info');
-            await paymentService.verifyPayment({
-              razorpay_order_id: razorpayResponse.razorpay_order_id,
-              razorpay_payment_id: razorpayResponse.razorpay_payment_id,
-              razorpay_signature: razorpayResponse.razorpay_signature,
-              order_id: orderId,
-            });
-            paymentDoneRef.current = true;
-            clearCart();
-            showToast('Payment successful! 🎉', 'success');
-            await refreshAfterPayment();
-            setPaymentLoading(false);
-            navigate('orders');
-          } catch (err) {
-            // Verify failed but Razorpay confirmed — webhook will mark it COMPLETED
-            paymentDoneRef.current = true;
-            clearCart();
-            showToast('Payment received! Your order will appear in Orders shortly.', 'info');
-            setPaymentLoading(false);
-            navigate('orders');
-          }
-          }, 400); // wait for Razorpay modal to fully close on mobile
+            try {
+              showToast('Verifying payment...', 'info');
+              await paymentService.verifyPayment({
+                razorpay_order_id: razorpayResponse.razorpay_order_id,
+                razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                razorpay_signature: razorpayResponse.razorpay_signature,
+                order_id: orderId,
+              });
+              paymentDoneRef.current = true;
+              clearCart();
+              // FIX 1: Navigate FIRST — instant redirect, refresh runs in background
+              navigate('orders');
+              showToast('Payment successful! 🎉', 'success');
+              refreshAfterPayment(); // no await — background
+              setPaymentLoading(false);
+            } catch (err) {
+              paymentDoneRef.current = true;
+              clearCart();
+              navigate('orders'); // FIX 1: Navigate first here too
+              showToast('Payment received! Your order will appear in Orders shortly.', 'info');
+              refreshAfterPayment(); // no await
+              setPaymentLoading(false);
+            }
+          }, 400);
         },
 
         onDismiss: async () => {
-          // On mobile (especially GPay), payment may have succeeded even if dismissed
-          // Silently check order status before showing "cancelled"
           try {
             const { getOrderById } = await import('@/services/orderService');
             const latestOrder = await getOrderById(orderId);
             if (latestOrder?.payment_status === 'COMPLETED') {
               clearCart();
-              showToast('Payment successful! 🎉', 'success');
-              await refreshAfterPayment();
-              setPaymentLoading(false);
+              // FIX 1: Navigate first
               navigate('orders');
+              showToast('Payment successful! 🎉', 'success');
+              refreshAfterPayment(); // no await
+              setPaymentLoading(false);
               return;
             }
           } catch (_) {}
@@ -183,7 +187,6 @@ export default function CartPage({ navigate, showToast }) {
     }
   };
 
-  /* ─── EMPTY CART ─── */
   if (cart.length === 0) {
     if (paymentLoading) {
       return (
@@ -218,12 +221,10 @@ export default function CartPage({ navigate, showToast }) {
     return hours * 60 + minutes;
   };
 
-  /* ─── MAIN CART ─── */
   return (
     <div className="qb-cart-page">
       <style>{cartStyles}</style>
 
-      {/* Header */}
       <div className="qb-cart-header">
         <button className="qb-back-btn" onClick={() => navigate('menu', { id: cart[0].outletId, name: cart[0].outletName })}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -234,7 +235,6 @@ export default function CartPage({ navigate, showToast }) {
         </div>
       </div>
 
-      {/* Outlet closed warning */}
       {outletClosed && (
         <div className="qb-warning-banner">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -242,7 +242,6 @@ export default function CartPage({ navigate, showToast }) {
         </div>
       )}
 
-      {/* Cart items */}
       <div className="qb-items-card">
         {cart.map((item, idx) => (
           <div key={item.id} className={`qb-cart-item ${idx < cart.length - 1 ? 'qb-cart-item--bordered' : ''}`}>
@@ -273,7 +272,6 @@ export default function CartPage({ navigate, showToast }) {
         ))}
       </div>
 
-      {/* Time slot picker */}
       <div className="qb-section-card">
         <h2 className="qb-section-title">Pick a time</h2>
         {slotsLoading ? (
@@ -287,7 +285,6 @@ export default function CartPage({ navigate, showToast }) {
             {slots.map(slot => {
               const slotMinutes = parseTimeToMinutes(slot.time);
               const isPast = slotMinutes < currentMinutes;
-
               return (
                 <button
                   key={slot.time}
@@ -303,7 +300,6 @@ export default function CartPage({ navigate, showToast }) {
         )}
       </div>
 
-      {/* Payment method */}
       <div className="qb-section-card">
         <h2 className="qb-section-title">Payment method</h2>
         <div className="qb-payment-option selected">
@@ -318,7 +314,6 @@ export default function CartPage({ navigate, showToast }) {
         </div>
       </div>
 
-      {/* Bill summary */}
       <div className="qb-section-card">
         <h2 className="qb-section-title">Bill details</h2>
         <div className="qb-bill-row"><span>Item total</span><span>₹{cartTotal}</span></div>
@@ -330,7 +325,6 @@ export default function CartPage({ navigate, showToast }) {
         <div className="qb-bill-row total"><span>Total</span><span>₹{grandTotal}</span></div>
       </div>
 
-      {/* Place order button */}
       <div className="qb-place-order-wrap">
         <button
           className={`qb-place-order-btn ${!canOrder || loading ? 'disabled' : ''}`}
@@ -359,7 +353,6 @@ export default function CartPage({ navigate, showToast }) {
   );
 }
 
-/* ─── STYLES ─── */
 const cartStyles = `
 .qb-cart-page {
   max-width: 560px;
