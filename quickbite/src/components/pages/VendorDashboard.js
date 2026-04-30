@@ -343,19 +343,13 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         setActionLoading(orderId);
 
         try {
-            if (currentStatus === 'Placed') {
-                const updatedOrder = await orderSvc.confirmPayment(orderId);
-                setOrders(prev => mergeOrderForward(prev, updatedOrder));
-                showToast('Payment confirmed', 'success');
-                // Background stats refresh — non-blocking
-                orderSvc.getOutletStats(selectedOutlet.id)
-                    .then(sData => { if (sData) setStats(sData); })
-                    .catch(() => {});
-            } else {
-                const updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
-                setOrders(prev => mergeOrderForward(prev, updatedOrder));
-                showToast('Order updated ✅');
-            }
+            const updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
+            setOrders(prev => mergeOrderForward(prev, updatedOrder));
+            showToast('Order updated ✅');
+            // Background stats refresh — non-blocking
+            orderSvc.getOutletStats(selectedOutlet.id)
+                .then(sData => { if (sData) setStats(sData); })
+                .catch(() => {});
         } catch (e) {
             showToast('Failed to update order', 'error');
             loadOutletData();
