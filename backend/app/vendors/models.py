@@ -12,5 +12,7 @@ class Vendor(Base):
     phone: Mapped[str] = mapped_column(String(20), unique=True)
     business_name: Mapped[str] = mapped_column(String(100))
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="vendor_profile")

@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from datetime import timedelta
 from app.orders.models import Order, OrderItem, Rating
@@ -21,12 +22,14 @@ import json
 IST = pytz.timezone('Asia/Kolkata')
 
 async def get_daily_token(db: AsyncSession, outlet_id: str) -> int:
+    await db.execute(select(Outlet.id).where(Outlet.id == outlet_id).with_for_update())
     today_ist = datetime.now(IST).date()
     start_of_day = IST.localize(datetime(today_ist.year, today_ist.month, today_ist.day))
     start_of_day_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
     result = await db.execute(
         select(func.count(Order.id)).where(
             Order.outlet_id == outlet_id,
+            Order.payment_status == "COMPLETED",
             Order.placed_at >= start_of_day_utc,
             Order.token_number.isnot(None)
         )
@@ -52,85 +55,118 @@ def get_upi_deep_link(outlet: Outlet, order: Order) -> str:
 
 async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     key = generate_idempotency_key(user_id, data.outlet_id, data.pickup_time, data.items)
+    lock_key = f"checkout_lock:{key}"
+    lock_acquired = redis_client.set(lock_key, user_id, ex=30, nx=True)
+    if not lock_acquired:
+        existing_id = redis_client.get(f"idempotency:{key}")
+        if existing_id:
+            result = await db.execute(select(Order).where(Order.id == str(existing_id)))
+            order = result.scalars().first()
+            if order and order.status not in ["Cancelled", "FAILED"]:
+                return order
+        raise HTTPException(status_code=409, detail="Order is already being created. Please wait a moment.")
+
     existing_id = redis_client.get(f"idempotency:{key}")
 
-    if existing_id:
-        existing_id = str(existing_id)
-        result = await db.execute(select(Order).where(Order.id == existing_id))
-        order = result.scalars().first()
-        if order and order.status not in ["Cancelled", "FAILED"]:
-            return order
+    try:
+        if existing_id:
+            existing_id = str(existing_id)
+            result = await db.execute(select(Order).where(Order.id == existing_id))
+            order = result.scalars().first()
+            if order and order.status not in ["Cancelled", "FAILED"]:
+                return order
 
-    # Also check DB directly in case Redis expired but order exists
-    db_existing = await db.execute(
-        select(Order).where(
-            Order.idempotency_key == key,
-            Order.status.not_in(["Cancelled", "FAILED"])
+        # Also check DB directly in case Redis expired but order exists
+        db_existing = await db.execute(
+            select(Order).where(
+                Order.idempotency_key == key,
+                Order.status.not_in(["Cancelled", "FAILED"])
+            )
         )
-    )
-    existing_order = db_existing.scalars().first()
-    if existing_order:
-        redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
-        return existing_order
+        existing_order = db_existing.scalars().first()
+        if existing_order:
+            redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
+            return existing_order
 
-    result = await db.execute(select(Outlet).where(Outlet.id == data.outlet_id))
-    outlet = result.scalars().first()
-    if not outlet or not outlet.is_open:
-        raise HTTPException(status_code=400, detail="Outlet is currently closed")
+        result = await db.execute(select(Outlet).where(Outlet.id == data.outlet_id))
+        outlet = result.scalars().first()
+        if not outlet or not outlet.is_open:
+            raise HTTPException(status_code=400, detail="Outlet is currently closed")
 
-    total_price = data.total_price
-    order_items_to_create = []
+        item_ids = [item.menu_item_id for item in data.items]
+        result = await db.execute(
+            select(MenuItem).where(
+                MenuItem.id.in_(item_ids),
+                MenuItem.outlet_id == data.outlet_id,
+                MenuItem.is_deleted == False
+            )
+        )
+        menu_items = {str(item.id): item for item in result.scalars().all()}
 
-    for item_input in data.items:
-        result = await db.execute(select(MenuItem).where(MenuItem.id == item_input.menu_item_id))
-        menu_item = result.scalars().first()
-        if not menu_item:
-            raise HTTPException(status_code=400, detail="Menu item not found")
-        if str(menu_item.outlet_id) != str(data.outlet_id):
-            raise HTTPException(status_code=400, detail="Item does not belong to this outlet")
-        if not menu_item.is_available:
-            raise HTTPException(status_code=400, detail=f"{menu_item.name} is currently unavailable")
-            
-        order_items_to_create.append(OrderItem(
-            menu_item_id=menu_item.id,
-            name=menu_item.name,
-            price=menu_item.price,
-            quantity=item_input.quantity,
-            is_veg=menu_item.is_veg
-        ))
+        subtotal = 0.0
+        order_items_to_create = []
+        for item_input in data.items:
+            menu_item = menu_items.get(str(item_input.menu_item_id))
+            if not menu_item:
+                raise HTTPException(status_code=400, detail="Menu item not found")
+            if not menu_item.is_available:
+                raise HTTPException(status_code=400, detail=f"{menu_item.name} is currently unavailable")
 
+            subtotal += float(menu_item.price) * item_input.quantity
+            order_items_to_create.append(OrderItem(
+                menu_item_id=menu_item.id,
+                name=menu_item.name,
+                price=menu_item.price,
+                quantity=item_input.quantity,
+                is_veg=menu_item.is_veg
+            ))
 
-    order_id = generate_order_id()
-    now_utc = datetime.utcnow()
-    
-    order = Order(
-        id=order_id,
-        user_id=user_id,
-        outlet_id=data.outlet_id,
-        status="Placed",
-        payment_status="PENDING",
-        payment_confirmed_by_vendor=False,
-        payment_gateway_id=None,
-        total_price=total_price,
-        pickup_time=data.pickup_time,
-        token_number=None,
-        payment_method="upi",
-        placed_at=now_utc,
-        updated_at=now_utc,
-        idempotency_key=key
-    )
-    db.add(order)
-    await db.flush()
+        platform_fee = PaymentService.calculate_platform_fee(subtotal)
+        total_price = PaymentService.calculate_payable_total(subtotal)
 
-    for oi in order_items_to_create:
-        oi.order_id = order.id
-        db.add(oi)
-    
-    await db.commit()
-    await db.refresh(order)
-    
-    redis_client.set(f"idempotency:{key}", order.id, ex=300)
-    return order
+        order_id = generate_order_id()
+        now_utc = datetime.utcnow()
+
+        order = Order(
+            id=order_id,
+            user_id=user_id,
+            outlet_id=data.outlet_id,
+            status="Placed",
+            payment_status="PENDING",
+            payment_confirmed_by_vendor=False,
+            payment_gateway_id=None,
+            total_price=total_price,
+            platform_fee=platform_fee,
+            pickup_time=data.pickup_time,
+            token_number=None,
+            payment_method="upi",
+            placed_at=now_utc,
+            updated_at=now_utc,
+            idempotency_key=key
+        )
+        db.add(order)
+        await db.flush()
+
+        for oi in order_items_to_create:
+            oi.order_id = order.id
+            db.add(oi)
+
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            db_existing = await db.execute(select(Order).where(Order.idempotency_key == key))
+            existing_order = db_existing.scalars().first()
+            if existing_order:
+                redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
+                return existing_order
+            raise
+        await db.refresh(order)
+
+        redis_client.set(f"idempotency:{key}", order.id, ex=300)
+        return order
+    finally:
+        redis_client.delete(lock_key)
 
 async def format_order_response(db: AsyncSession, order: Order) -> dict:
     result = await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))

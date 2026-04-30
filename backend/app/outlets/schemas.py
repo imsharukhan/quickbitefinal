@@ -13,6 +13,7 @@ class OutletCreate(BaseModel):
     description: Optional[str] = None
     cuisine: Optional[str] = None
     upi_id: Optional[str] = None
+    razorpay_account_id: Optional[str] = None
     opening_time: str = "08:00"
     closing_time: str = "20:00"
     slot_duration_minutes: int = 15
@@ -23,6 +24,7 @@ class OutletUpdate(BaseModel):
     description: Optional[str] = None
     cuisine: Optional[str] = None
     upi_id: Optional[str] = None
+    razorpay_account_id: Optional[str] = None
     opening_time: Optional[str] = None
     closing_time: Optional[str] = None
     slot_duration_minutes: Optional[int] = None
@@ -41,6 +43,7 @@ class OutletResponse(BaseModel):
     is_open: bool
     rating: float
     upi_id: Optional[str]
+    razorpay_account_id: Optional[str] = None
     opening_time: str
     closing_time: str
     slot_duration_minutes: int

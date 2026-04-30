@@ -20,6 +20,7 @@ async def create_outlet(db: AsyncSession, data: OutletCreate) -> Outlet:
         description=data.description,
         cuisine=data.cuisine,
         upi_id=data.upi_id,
+        razorpay_account_id=data.razorpay_account_id,
         opening_time=data.opening_time,
         closing_time=data.closing_time,
         slot_duration_minutes=data.slot_duration_minutes,
@@ -91,6 +92,9 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
         target_date = now.date()
     else:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+    if outlet.closed_dates and target_date.strftime("%Y-%m-%d") in outlet.closed_dates:
+        return []
 
     # Fixed order window: 11:00 AM to 3:00 PM IST
     order_start_dt = IST.localize(datetime(

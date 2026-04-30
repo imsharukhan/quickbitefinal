@@ -42,7 +42,9 @@ async def update_me(
     db: AsyncSession = Depends(get_db)
 ):
     user = await service.update_user(db, str(current_user.id), data)
-    return user
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await get_me(current_user=user, db=db)
 
 @router.post("/change-password")
 async def change_user_password(

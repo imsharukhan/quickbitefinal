@@ -20,7 +20,8 @@ router = APIRouter(dependencies=[Depends(get_current_admin)])
 IST = pytz.timezone('Asia/Kolkata')
 
 class AdminVendorCreate(BaseModel):
-    name: str
+    business_name: str
+    email: Optional[str] = None
     phone: str
     initial_password: str
 
@@ -37,12 +38,23 @@ async def create_vendor_admin(data: AdminVendorCreate, db: AsyncSession = Depend
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
         
-    new_vendor = Vendor(
-        name=data.name,
-        phone=data.phone,
-        password_hash=hashed_pw,
+    user = User(
+        email=data.email,
+        role="vendor",
+        hashed_password=hashed_pw,
+        is_active=True,
+        is_verified=True,
         must_change_password=True,
-        is_active=True
+    )
+    db.add(user)
+    await db.flush()
+
+    new_vendor = Vendor(
+        user_id=user.id,
+        phone=data.phone,
+        business_name=data.business_name,
+        must_change_password=True,
+        is_active=True,
     )
     db.add(new_vendor)
     await db.commit()
@@ -62,7 +74,7 @@ async def list_vendors(db: AsyncSession = Depends(get_db)):
         if vid not in vendors_dict:
             vendors_dict[vid] = {
                 "id": vid,
-                "name": v.name,
+                "business_name": v.business_name,
                 "phone": v.phone,
                 "is_active": v.is_active,
                 "created_at": v.created_at,
@@ -76,7 +88,7 @@ async def list_vendors(db: AsyncSession = Depends(get_db)):
 @router.get("/outlets")
 async def list_outlets(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Outlet, Vendor.name).join(Vendor, Outlet.vendor_id == Vendor.id)
+        select(Outlet, Vendor.business_name).join(Vendor, Outlet.vendor_id == Vendor.id)
     )
     rows = result.all()
     outlets = []
@@ -100,7 +112,8 @@ async def list_orders(
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(Order, User.name, Outlet.name).join(User, Order.user_id == User.id).join(Outlet, Order.outlet_id == Outlet.id)
+    from app.users.models import Student
+    query = select(Order, Student.name, Outlet.name).join(User, Order.user_id == User.id).join(Student, Student.user_id == User.id).join(Outlet, Order.outlet_id == Outlet.id)
     
     if status:
         query = query.where(Order.status == status)
@@ -109,7 +122,8 @@ async def list_orders(
     if date:
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
         start = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
-        end = start + pytz.timedelta(days=1)
+        from datetime import timedelta
+        end = start + timedelta(days=1)
         start_utc = start.astimezone(pytz.UTC).replace(tzinfo=None)
         end_utc = end.astimezone(pytz.UTC).replace(tzinfo=None)
         query = query.where(Order.placed_at >= start_utc, Order.placed_at < end_utc)

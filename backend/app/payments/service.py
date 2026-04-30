@@ -1,11 +1,15 @@
-import razorpay
-import hmac
 import hashlib
+import hmac
+import math
+
+import razorpay
+
 from app.config import settings
 
-PLATFORM_FEE = settings.PLATFORM_FEE  # ₹7 kept by QuickBite
+PLATFORM_FEE_RATE = settings.PLATFORM_FEE_RATE
 
 _client = None
+
 
 def get_client():
     global _client
@@ -15,12 +19,21 @@ def get_client():
 
 
 class PaymentService:
+    @staticmethod
+    def calculate_platform_fee(food_amount_rupees: float) -> float:
+        if food_amount_rupees <= 0:
+            return 0.0
+        total = math.ceil(food_amount_rupees / (1 - PLATFORM_FEE_RATE))
+        return round(total - food_amount_rupees, 2)
+
+    @staticmethod
+    def calculate_payable_total(food_amount_rupees: float) -> float:
+        return round(food_amount_rupees + PaymentService.calculate_platform_fee(food_amount_rupees), 2)
 
     @staticmethod
     def create_razorpay_order(amount_rupees: float, receipt: str) -> dict:
-        """Create Razorpay order. Amount in rupees → converted to paise."""
         return get_client().order.create(data={
-            "amount": int(amount_rupees * 100),
+            "amount": int(round(amount_rupees * 100)),
             "currency": "INR",
             "receipt": receipt,
         })
@@ -51,22 +64,17 @@ class PaymentService:
         return hmac.compare_digest(expected, signature)
 
     @staticmethod
-    def transfer_to_canteen(payment_id: str, linked_account_id: str, items_amount_rupees: float):
-        """
-        Transfer items amount (excluding platform fee) to canteen's linked account.
-        Called only after KYC — linked_account_id starts with 'acc_'
-        """
+    def transfer_to_canteen(payment_id: str, linked_account_id: str, vendor_amount_rupees: float):
         return get_client().payment.transfer(payment_id, {
             "transfers": [{
                 "account": linked_account_id,
-                "amount": int(items_amount_rupees * 100),
+                "amount": int(round(vendor_amount_rupees * 100)),
                 "currency": "INR",
                 "on_hold": 0,
                 "notes": {"purpose": "canteen_order_payment"}
             }]
         })
 
-    # ── Kept for backward compat (vendor manual confirm fallback) ──────
     @staticmethod
     def verify_upi_payment(order, payment_gateway_id: str = None) -> dict:
         return {"verified": True, "gateway_id": payment_gateway_id or "MANUAL"}

@@ -172,6 +172,13 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE outlets ADD COLUMN IF NOT EXISTS razorpay_account_id VARCHAR(100)",
         "ALTER TABLE outlets ADD COLUMN IF NOT EXISTS closed_dates JSON DEFAULT '[]'",
         "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee FLOAT DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE vendors ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
+        "CREATE INDEX IF NOT EXISTS idx_menu_items_outlet_active ON menu_items (outlet_id, is_deleted, category)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_user_placed ON orders (user_id, placed_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_outlet_day ON orders (outlet_id, placed_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_razorpay_order ON orders (razorpay_order_id)",
     ]
     try:
         from sqlalchemy import text

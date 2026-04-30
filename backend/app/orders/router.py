@@ -12,6 +12,21 @@ import time
 
 router = APIRouter()
 
+
+async def notify_vendor_for_outlet(db: AsyncSession, outlet_id: str, payload: dict):
+    from sqlalchemy.future import select
+    from app.outlets.models import Outlet
+    from app.vendors.models import Vendor
+
+    outlet_res = await db.execute(select(Outlet).where(Outlet.id == outlet_id))
+    outlet = outlet_res.scalars().first()
+    if not outlet:
+        return
+    vendor_res = await db.execute(select(Vendor).where(Vendor.id == outlet.vendor_id))
+    vendor = vendor_res.scalars().first()
+    if vendor:
+        await manager.notify_vendor(str(vendor.user_id), payload)
+
 @router.post("", response_model=schemas.OrderResponse)
 async def create_order(
     data: schemas.OrderCreate,
@@ -120,10 +135,7 @@ async def cancel_student(
         db, order_id, str(current_user.id), data.reason
     )
     
-    await manager.notify_vendor(
-        str(order["outlet_id"]),
-        {"type": "ORDER_CANCELLED", "order_id": order_id}
-    )
+    await notify_vendor_for_outlet(db, str(order["outlet_id"]), {"type": "ORDER_CANCELLED", "order_id": order_id})
     return order
 
 @router.patch("/{order_id}/cancel-vendor", response_model=schemas.OrderResponse)

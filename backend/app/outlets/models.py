@@ -17,6 +17,7 @@ class Outlet(Base):
     is_open: Mapped[bool] = mapped_column(Boolean, default=True)
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     upi_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    razorpay_account_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     opening_time: Mapped[str] = mapped_column(String(5), default="08:00")
     closing_time: Mapped[str] = mapped_column(String(5), default="20:00")
     slot_duration_minutes: Mapped[int] = mapped_column(Integer, default=15)
