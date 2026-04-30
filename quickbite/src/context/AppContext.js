@@ -3,13 +3,51 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import * as orderService from '../services/orderService';
 import * as notificationService from '../services/notificationService';
 import { useAuth } from './AuthContext';
+import { useWebSocket } from '../hooks/useWebSocket';
+
 
 const AppContext = createContext();
 
 const RAZORPAY_RATE = 0.0236; // 2% + 18% GST
 
 export function AppProvider({ children }) {
-    const { isLoggedIn } = useAuth();
+    const { isLoggedIn, user } = useAuth();
+ 
+    // ── Global WebSocket — runs on ALL pages so notifications and order
+    // updates are instant regardless of which page student is on ────────
+    const studentId = user?.id && localStorage.getItem('qb_role') !== 'vendor'
+        ? user.id
+        : null;
+    const { lastMessage: wsMessage } = useWebSocket('student', studentId);
+ 
+    useEffect(() => {
+        if (!wsMessage) return;
+ 
+        if (wsMessage.type === 'STATUS_UPDATE') {
+            // Instantly update order status in state — no API call needed
+            setOrders(prev => prev.map(order =>
+                order.id === wsMessage.order_id
+                    ? {
+                        ...order,
+                        status: wsMessage.status,
+                        payment_status: wsMessage.payment_status || order.payment_status,
+                    }
+                    : order
+            ));
+            // Update notifications silently in background
+            setTimeout(() => {
+                loadOrders();
+                loadNotifications();
+            }, 500);
+        }
+ 
+        if (wsMessage.type === 'PAYMENT_CONFIRMED') {
+            setTimeout(() => {
+                loadOrders();
+                loadNotifications();
+            }, 400);
+        }
+    }, [wsMessage]);
 
     const [cart, setCart] = useState([]);
     const [orders, setOrders] = useState([]);

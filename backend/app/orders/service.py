@@ -406,10 +406,9 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     ))
     completed_today = res.scalar() or 0
     
-    # 5. Revenue Today — exact food amount from order items only
+    # 5. Revenue Today — exact amount student paid (includes platform fee)
     res = await db.execute(
-        select(func.sum(OrderItem.price * OrderItem.quantity))
-        .join(Order, OrderItem.order_id == Order.id)
+        select(func.sum(Order.total_price))
         .where(
             Order.outlet_id == outlet_id,
             Order.status == "Picked Up",
@@ -419,10 +418,9 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
     )
     revenue_today = float(res.scalar() or 0.0)
 
-    # 6. Total Revenue — exact food amount from order items only
+    # 6. Total Revenue — exact amount student paid (includes platform fee)
     res = await db.execute(
-        select(func.sum(OrderItem.price * OrderItem.quantity))
-        .join(Order, OrderItem.order_id == Order.id)
+        select(func.sum(Order.total_price))
         .where(
             Order.outlet_id == outlet_id,
             Order.status == "Picked Up",
@@ -469,13 +467,9 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
     )
     all_orders = orders_res.fetchall()
 
-    # Single query: revenue per order in window
+    # Single query: revenue per order — use total_price (what student actually paid)
     revenue_res = await db.execute(
-        select(
-            OrderItem.order_id,
-            func.sum(OrderItem.price * OrderItem.quantity).label("total")
-        )
-        .join(Order, OrderItem.order_id == Order.id)
+        select(Order.id, Order.total_price)
         .where(
             Order.outlet_id == outlet_id,
             Order.placed_at >= start_utc,
@@ -483,9 +477,8 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
             Order.payment_status == "COMPLETED",
             Order.status != "Cancelled",
         )
-        .group_by(OrderItem.order_id)
     )
-    revenue_by_order = {row.order_id: float(row.total) for row in revenue_res.fetchall()}
+    revenue_by_order = {row.id: float(row.total_price) for row in revenue_res.fetchall()}
 
     # Group by IST date in Python (fast, no DB round trips)
     from collections import defaultdict

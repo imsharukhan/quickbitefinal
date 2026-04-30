@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import { useWebSocket } from '@/hooks/useWebSocket';
 import * as orderService from '@/services/orderService';
 import { Clock, RefreshCw } from 'lucide-react';
 
@@ -16,33 +15,7 @@ export default function OrdersPage({ navigate, showToast }) {
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
 
   const { user } = useAuth();
-  const { lastMessage } = useWebSocket('student', user?.id);
-
-  useEffect(() => {
-    if (!lastMessage) return;
-
-    if (lastMessage.type === 'STATUS_UPDATE') {
-      // Instant optimistic update
-      setOrders(prev => prev.map(order =>
-        order.id === lastMessage.order_id
-          ? {
-              ...order,
-              status: lastMessage.status,
-              payment_status: lastMessage.payment_status || order.payment_status,
-            }
-          : order
-      ));
-      if (showToast) showToast(lastMessage.message || `Order updated to ${lastMessage.status}!`, 'success');
-      // Refresh both orders and notifications silently
-      setTimeout(() => { loadOrders(); loadNotifications(); }, 600);
-    }
-
-    if (lastMessage.type === 'PAYMENT_CONFIRMED') {
-      setTimeout(() => { loadOrders(); loadNotifications(); }, 400);
-      if (showToast) showToast(lastMessage.message || 'Payment confirmed! 🎉', 'success');
-    }
-  }, [lastMessage]);
-
+  
   const generateUpiLink = (order) => {
     const upiId = order.outlet_upi_id || 'sharukhansharukhan926@oksbi';
     const name = encodeURIComponent(order.outlet_name || 'QuickBite');
