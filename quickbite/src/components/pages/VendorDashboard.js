@@ -45,6 +45,17 @@ const mergeOrderForward = (orders, incoming) => {
     return incomingRank >= currentRank ? incoming : order;
   });
 };
+
+const mergeOrderListForward = (currentOrders, incomingOrders = []) => {
+  const currentById = new Map(currentOrders.map(order => [order.id, order]));
+  return incomingOrders.map(incoming => {
+    const current = currentById.get(incoming.id);
+    if (!current) return incoming;
+    const currentRank = STATUS_RANK[current.status] ?? -1;
+    const incomingRank = STATUS_RANK[incoming.status] ?? -1;
+    return incomingRank >= currentRank ? incoming : current;
+  });
+};
  
 export default function VendorDashboard({ showToast }) {
     const { user, logout } = useAuth();
@@ -106,7 +117,7 @@ export default function VendorDashboard({ showToast }) {
                 menuMgmt.getFullMenu(selectedOutlet.id),
                 orderSvc.getOutletStats(selectedOutlet.id).catch(() => stats)
             ]);
-            setOrders(oData || []);
+            setOrders(prev => mergeOrderListForward(prev, oData || []));
             setMenu(mData || []);
             if (sData) setStats(sData);
         } catch (e) { console.error(e); }

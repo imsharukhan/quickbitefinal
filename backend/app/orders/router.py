@@ -97,7 +97,7 @@ async def confirm_payment(
             "status": order["status"],
             "payment_status": "COMPLETED",
             "order": order,
-            "message": "Payment confirmed! Your food is being prepared 🍳"
+            "message": f"Order #{order['token_number']} status is {order['status']}"
         }
     )
     return order

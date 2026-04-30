@@ -11,7 +11,7 @@ from sqlalchemy.future import select
 from app.auth.dependencies import get_current_user
 from app.config import settings
 from app.database import AsyncSessionLocal, get_db
-from app.notifications.models import Notification
+from app.notifications.service import create_notification
 from app.orders.models import Order, OrderItem
 from app.orders.service import format_order_response, get_daily_token
 from app.orders.websocket import manager
@@ -89,11 +89,12 @@ async def _mark_order_paid(db: AsyncSession, order: Order, payment_id: str) -> d
     outlet = outlet_res.scalars().first()
     outlet_name = outlet.name if outlet else "canteen"
 
-    db.add(Notification(
-        user_id=order.user_id,
-        message=f"Payment confirmed! Your token #{order.token_number} at {outlet_name}. Show it at the counter to collect your order.",
-        related_order_id=order.id
-    ))
+    await create_notification(
+        db,
+        str(order.user_id),
+        f"Payment confirmed! Your token #{order.token_number} at {outlet_name}. Show it at the counter to collect your order.",
+        order.id,
+    )
     await db.commit()
 
     formatted = await format_order_response(db, order)

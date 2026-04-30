@@ -9,6 +9,15 @@ import { useWebSocket } from '../hooks/useWebSocket';
 const AppContext = createContext();
 
 const RAZORPAY_RATE = 0.0236; // 2% + 18% GST
+const dedupeNotifications = (items = []) => {
+    const byId = new Map();
+    for (const item of items) {
+        if (!item?.id) continue;
+        const existing = byId.get(item.id);
+        byId.set(item.id, existing ? { ...item, is_read: existing.is_read || item.is_read } : item);
+    }
+    return Array.from(byId.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+};
 
 export function AppProvider({ children }) {
     const { isLoggedIn, user } = useAuth();
@@ -43,6 +52,10 @@ export function AppProvider({ children }) {
         if (wsMessage.type === 'PAYMENT_CONFIRMED') {
             loadOrders();
             loadNotifications();
+        }
+
+        if (wsMessage.type === 'NEW_NOTIFICATION' && wsMessage.notification?.id) {
+            setNotifications(prev => dedupeNotifications([wsMessage.notification, ...prev]));
         }
     }, [wsMessage]);
 
@@ -89,7 +102,7 @@ export function AppProvider({ children }) {
                 notificationService.getNotifications(),
             ]);
             setOrders(ordersData || []);
-            setNotifications(notifsData?.notifications || []);
+            setNotifications(prev => dedupeNotifications([...(notifsData?.notifications || []), ...prev]));
         } catch (e) {
             console.error('refresh after payment failed', e);
         }
@@ -106,7 +119,7 @@ export function AppProvider({ children }) {
         setIsNotifsLoading(true);
         try {
             const data = await notificationService.getNotifications();
-            setNotifications(data.notifications || []);
+            setNotifications(prev => dedupeNotifications([...(data.notifications || []), ...prev]));
         } catch(e) {
             console.error(e);
             if (e?.response?.status === 401 || (e?.response && e.response.status === 401)) {
@@ -220,15 +233,15 @@ export function AppProvider({ children }) {
 
     const markNotificationRead = async (id) => {
         try {
-            await notificationService.markAsRead(id);
-            await loadNotifications();
+            const updated = await notificationService.markAsRead(id);
+            setNotifications(prev => dedupeNotifications(prev.map(n => n.id === id ? updated : n)));
         } catch(e) {}
     };
 
     const markAllNotificationsRead = async () => {
         try {
-            await notificationService.markAllRead();
-            await loadNotifications();
+            const data = await notificationService.markAllRead();
+            setNotifications(dedupeNotifications(data?.notifications || []));
         } catch(e) {}
     };
 

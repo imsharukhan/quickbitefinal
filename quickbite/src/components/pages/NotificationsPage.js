@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 
 function formatRelativeTime(dateString) {
@@ -16,17 +17,18 @@ function formatRelativeTime(dateString) {
 
 export default function NotificationsPage({ navigate }) {
   const { notifications, markNotificationRead, markAllNotificationsRead, isNotifsLoading, setNotifications } = useApp();
+  const [markingAll, setMarkingAll] = useState(false);
 
   const handleMarkAllRead = async () => {
-    // Optimistic update — instant UI response
+    if (markingAll) return;
+    setMarkingAll(true);
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     try { await markAllNotificationsRead(); } catch (_) {}
+    finally { setMarkingAll(false); }
   };
 
   const handleClearAll = async () => {
-    // Optimistic — clear locally immediately
-    setNotifications([]);
-    try { await markAllNotificationsRead(); } catch (_) {}
+    await handleMarkAllRead();
   };
 
   if (isNotifsLoading && notifications.length === 0) {
@@ -41,7 +43,6 @@ export default function NotificationsPage({ navigate }) {
     <div style={{ maxWidth: '560px', margin: '0 auto', padding: '16px 16px 120px' }}>
       <style>{notifStyles}</style>
 
-      {/* Header */}
       <div className="nf-header">
         <div className="nf-header-left">
           <h1 className="nf-title">Notifications</h1>
@@ -49,15 +50,17 @@ export default function NotificationsPage({ navigate }) {
         </div>
         {notifications.length > 0 && (
           <div className="nf-actions">
-            <button className="nf-btn-text" onClick={handleMarkAllRead}>Mark all read</button>
-            <button className="nf-btn-clear" onClick={handleClearAll}>Clear all</button>
+            <button className="nf-btn-text" onClick={handleMarkAllRead} disabled={markingAll}>
+              {markingAll ? 'Saving...' : 'Mark all read'}
+            </button>
+            <button className="nf-btn-clear" onClick={handleClearAll} disabled={markingAll}>Clear all</button>
           </div>
         )}
       </div>
 
       {notifications.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">🔔</div>
+          <div className="empty-icon">Bell</div>
           <h3>All caught up!</h3>
           <p>You have no new notifications.</p>
         </div>
@@ -74,14 +77,17 @@ export default function NotificationsPage({ navigate }) {
               style={{ cursor: notif.related_order_id ? 'pointer' : 'default' }}
             >
               <div className="nf-icon">
-                {notif.message.toLowerCase().includes('ready') ? '🍽️'
-                  : notif.message.toLowerCase().includes('confirmed') ? '✅' : '🔔'}
+                {notif.message.toLowerCase().includes('ready')
+                  ? 'Meal'
+                  : notif.message.toLowerCase().includes('confirmed')
+                    ? 'Paid'
+                    : 'Bell'}
               </div>
               <div className="nf-body">
                 <p className="nf-msg">
                   {notif.message}
                   {notif.related_order_id && (
-                    <span className="nf-view"> → View Order</span>
+                    <span className="nf-view"> - View Order</span>
                   )}
                 </p>
                 <span className="nf-time">{formatRelativeTime(notif.created_at)}</span>
@@ -140,6 +146,11 @@ const notifStyles = `
   padding: 0;
   white-space: nowrap;
 }
+.nf-btn-text:disabled,
+.nf-btn-clear:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .nf-btn-clear {
   background: var(--red-bg, #fff0f0);
   border: 1px solid var(--red, #e53935);
@@ -172,9 +183,11 @@ const notifStyles = `
   border-color: var(--primary-light, #fcd49a);
 }
 .nf-icon {
-  font-size: 1.2rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--primary);
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 3px;
 }
 .nf-body {
   flex: 1;

@@ -13,6 +13,7 @@ from app.redis_client import redis_client
 from app.auth.utils import generate_order_id
 from app.payments.service import PaymentService
 from app.notifications.models import Notification
+from app.notifications.service import create_notification
 from datetime import datetime
 from uuid import UUID
 import pytz
@@ -318,11 +319,12 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     order.status = "Preparing"
     order.updated_at = datetime.utcnow()
 
-    db.add(Notification(
-        user_id=order.user_id,
-        message=f"🍳 Order #{order.token_number} is being prepared!",
-        related_order_id=order.id
-    ))
+    await create_notification(
+        db,
+        str(order.user_id),
+        f"🍳 Order #{order.token_number} is being prepared!",
+        order.id,
+    )
 
     await db.commit()
     return await format_order_response(db, order)
@@ -359,12 +361,7 @@ async def update_order_status(db: AsyncSession, order_id: str, new_status: str, 
         msg = f"Order #{order.token_number} picked up! Enjoy your meal 😊 Rate us ⭐"
         
     if msg:
-        notification = Notification(
-            user_id=order.user_id,
-            message=msg,
-            related_order_id=order.id
-        )
-        db.add(notification)
+        await create_notification(db, str(order.user_id), msg, order.id)
         
     await db.commit()
     return await format_order_response(db, order)
