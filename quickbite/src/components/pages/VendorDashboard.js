@@ -28,7 +28,6 @@ const getCategoryImg = (catName) => {
     : '/categories/other.png';
 };
 const FALLBACK_IMAGE = '/categories/other.png';
-// const PRINTING_ENABLED = false; // DISABLED
 const STATUS_RANK = {
   Placed: 0,
   Preparing: 1,
@@ -164,179 +163,6 @@ export default function VendorDashboard({ showToast }) {
     }
  
     // Confetti logic seamlessly replaced with a clean UI toast below!
-
-//   const printOrderBills = (order) => {
-//   const win = window.open('', '_blank', 'width=420,height=600');
-//   if (!win) {
-//     showToast?.('Print window was blocked. Please allow pop-ups for this site.', 'error');
-//     return;
-//   }
-//   const items = order.items || [];
-//   const foodTotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-//   // total_price is what student actually paid (food + platform fee)
-//   const totalPaid = order.total_price || foodTotal;
-//   const platformFee = parseFloat((totalPaid - foodTotal).toFixed(2));
- 
-//   const itemRows = items.map(i =>
-//     `<tr>
-//       <td style="padding:3px 0">${i.quantity}x ${i.name}</td>
-//       <td style="text-align:right;padding:3px 0;font-weight:600">&#8377;${(i.price * i.quantity).toFixed(0)}</td>
-//     </tr>`
-//   ).join('');
- 
-//   const now = new Date().toLocaleString('en-IN', {
-//     timeZone: 'Asia/Kolkata',
-//     day: '2-digit', month: 'short', year: 'numeric',
-//     hour: '2-digit', minute: '2-digit', hour12: true
-//   });
- 
-//   win.document.write(`<!DOCTYPE html>
-// <html>
-// <head>
-//   <meta charset="UTF-8"/>
-//   <title>QuickBite Bills — Token #${order.token_number}</title>
-//   <style>
-//     * { margin:0; padding:0; box-sizing:border-box; }
-//     body { font-family: 'Courier New', monospace; background: white; }
- 
-//     .page { width: 76mm; padding: 6mm 4mm; }
- 
-//     /* Bill 1 and Bill 2 each on their own print page */
-//     .bill1 { page-break-after: always; }
-//     .bill2 { page-break-after: avoid; }
- 
-//     .center { text-align: center; }
-//     .right   { text-align: right; }
-//     .bold    { font-weight: 700; }
- 
-//     .shop-name {
-//       font-size: 16px; font-weight: 900;
-//       text-align: center; letter-spacing: 1px;
-//       text-transform: uppercase; margin-bottom: 2px;
-//     }
-//     .shop-sub {
-//       font-size: 10px; text-align: center;
-//       color: #555; margin-bottom: 6px;
-//     }
-//     .dashed { border-top: 1px dashed #000; margin: 5px 0; }
-//     .solid  { border-top: 2px solid #000; margin: 5px 0; }
- 
-//     .token-label { font-size: 10px; text-align: center; letter-spacing: 2px; text-transform: uppercase; color: #555; }
-//     .token-num   { font-size: 42px; font-weight: 900; text-align: center; line-height: 1.1; }
- 
-//     table { width: 100%; border-collapse: collapse; font-size: 12px; }
-//     .total-row td { font-size: 13px; font-weight: 700; padding-top: 5px; border-top: 1px dashed #000; }
-//     .fee-row td   { font-size: 10px; color: #555; }
- 
-//     .paid-box {
-//       border: 2px solid #000; border-radius: 4px;
-//       text-align: center; padding: 4px 0; margin: 6px 0;
-//       font-size: 13px; font-weight: 900; letter-spacing: 1px;
-//     }
-//     .footer { font-size: 9px; text-align: center; color: #888; margin-top: 6px; }
- 
-//     /* BILL 2 — kitchen slip */
-//     .kitchen-token { font-size: 64px; font-weight: 900; text-align: center; line-height: 1; }
-//     .kitchen-amt   { font-size: 28px; font-weight: 900; text-align: center; margin: 4px 0; }
- 
-//     @media print {
-//       @page { margin: 0; size: 80mm auto; }
-//       body  { margin: 0; }
-//       .no-print { display: none !important; }
-//     }
-//   </style>
-// </head>
-// <body>
- 
-// <!-- ═══════════════════════════════════════════
-//      BILL 1 — Customer Copy (full details)
-// ═══════════════════════════════════════════ -->
-// <div class="page bill1">
-//   <div class="shop-name">QuickBite</div>
-//   <div class="shop-sub">${order.outlet_name}</div>
-//   <div class="dashed"></div>
- 
-//   <div class="token-label">TOKEN NUMBER</div>
-//   <div class="token-num">#${order.token_number}</div>
- 
-//   <div class="dashed"></div>
- 
-//   <div style="font-size:11px; margin-bottom:3px">
-//     <span class="bold">Student:</span> ${order.student_name || '—'}
-//   </div>
-//   <div style="font-size:11px; margin-bottom:3px">
-//     <span class="bold">Pickup:</span> ${order.pickup_time || '—'}
-//   </div>
-//   <div style="font-size:10px; color:#666; margin-bottom:4px">${now}</div>
- 
-//   <div class="dashed"></div>
- 
-//   <table>
-//     ${itemRows}
-//   </table>
- 
-//   <table style="margin-top:6px">
-//     <tr class="fee-row">
-//       <td>Food subtotal</td>
-//       <td class="right">&#8377;${foodTotal.toFixed(0)}</td>
-//     </tr>
-//     ${platformFee > 0 ? `<tr class="fee-row">
-//       <td>Platform fee</td>
-//       <td class="right">&#8377;${platformFee.toFixed(2)}</td>
-//     </tr>` : ''}
-//     <tr class="total-row">
-//       <td>TOTAL PAID</td>
-//       <td class="right">&#8377;${totalPaid.toFixed(0)}</td>
-//     </tr>
-//   </table>
- 
-//   <div class="paid-box">&#10003; PAID via UPI</div>
- 
-//   <div class="footer">
-//     QuickBite — Campus Pre-Order &bull; Customer Copy
-//   </div>
-// </div>
- 
- 
-// <!-- ═══════════════════════════════════════════
-//      BILL 2 — Kitchen Slip (token + amount only)
-// ═══════════════════════════════════════════ -->
-// <div class="page bill2">
-//   <div class="shop-name">${order.outlet_name}</div>
-//   <div class="dashed"></div>
- 
-//   <div class="token-label">TOKEN</div>
-//   <div class="kitchen-token">#${order.token_number}</div>
- 
-//   <div class="dashed"></div>
- 
-//   <div class="kitchen-amt">&#8377;${totalPaid.toFixed(0)}</div>
-//   <div class="paid-box">&#10003; PAID</div>
- 
-//   <div style="font-size:11px; text-align:center; margin-top:4px">
-//     Pickup: ${order.pickup_time || '—'}
-//   </div>
-//   <div class="footer" style="margin-top:6px">Kitchen Copy</div>
-// </div>
- 
-// <!-- Print button — only visible on screen, not on paper -->
-// <div class="no-print" style="padding:12px; text-align:center">
-//   <button onclick="window.print()"
-//     style="padding:10px 28px;background:#ff6b35;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">
-//     🖨️ Print Bills
-//   </button>
-//   <p style="font-size:11px;color:#888;margin-top:6px">
-//     Tip: Set thermal printer as default &amp; enable "Skip print preview" in Chrome for one-click printing.
-//   </p>
-// </div>
- 
-// </body>
-// </html>`);
- 
-//   win.document.close();
-//   win.focus();
-//   setTimeout(() => { win.print(); }, 350);
-// };
 
 const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         if (actionLoading) return;
@@ -704,7 +530,6 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 ⚠️ Waiting {minsWaiting} min — confirm or cancel
                                             </div>
                                         )}
-                                        {null /* bill printing removed */}
                                         {(action || order.status === 'Placed') && (
                                             <div style={{ padding: '12px 16px', display: 'flex', gap: '8px' }}>
                                                 {order.status === 'Placed' && (
@@ -1212,4 +1037,3 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         </div>
     );
 }
- 
