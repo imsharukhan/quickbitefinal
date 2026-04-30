@@ -28,7 +28,7 @@ const getCategoryImg = (catName) => {
     : '/categories/other.png';
 };
 const FALLBACK_IMAGE = '/categories/other.png';
-const PRINTING_ENABLED = false;
+// const PRINTING_ENABLED = false; // DISABLED
 const STATUS_RANK = {
   Placed: 0,
   Preparing: 1,
@@ -710,17 +710,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 ⚠️ Waiting {minsWaiting} min — confirm or cancel
                                             </div>
                                         )}
-                                        {/* BILL PRINTING DISABLED — remove comment to re-enable
-                                        {PRINTING_ENABLED && order.payment_status === 'COMPLETED' && !['Cancelled'].includes(order.status) && (
-                                            <div style={{ padding: '4px 16px 0' }}>
-                                                <button
-                                                    onClick={() => printOrderBills(order)}
-                                                    style={{ width: '100%', padding: '6px', borderRadius: 'var(--radius)', border: '1px dashed var(--border)', background: 'none', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-                                                    🖨️ Reprint Bill
-                                                </button>
-                                            </div>
-                                        )}
-                                        */}
+                                        {null /* bill printing removed */}
                                         {(action || order.status === 'Placed') && (
                                             <div style={{ padding: '12px 16px', display: 'flex', gap: '8px' }}>
                                                 {order.status === 'Placed' && (
