@@ -10,7 +10,7 @@ import { loadRazorpayScript, openRazorpayCheckout } from '@/utils/razorpay';
 const RAZORPAY_RATE = 0.0236;
 
 export default function CartPage({ navigate, showToast }) {
-  const { cart, removeFromCart, updateCartQuantity, cartTotal, grandTotal, placeOrder, clearCart, isSubmittingRef, refreshAfterPayment, processingFee } = useApp();
+  const { cart, removeFromCart, updateCartQuantity, cartTotal, grandTotal, placeOrder, clearCart, isSubmittingRef, refreshAfterPayment, processingFee, setOrders } = useApp();
 
   const getCategoryImg = (catName) => {
     if (!catName) return null;
@@ -45,6 +45,7 @@ export default function CartPage({ navigate, showToast }) {
             const data = await res.json();
             if (data?.payment_status === 'COMPLETED') {
               paymentDoneRef.current = true;
+              setOrders(prev => [data, ...prev.filter(o => o.id !== data.id)]);
               clearCart();
               // FIX 1: Navigate FIRST — don't wait for refresh to complete
               navigate('orders');
@@ -132,17 +133,19 @@ export default function CartPage({ navigate, showToast }) {
         userName: user?.student_profile?.name || user?.name || '',
         userEmail: user?.email || '',
 
-        onSuccess: (razorpayResponse) => {
-          setTimeout(async () => {
+        onSuccess: async (razorpayResponse) => {
             try {
               showToast('Verifying payment...', 'info');
-              await paymentService.verifyPayment({
+              const verifiedOrder = await paymentService.verifyPayment({
                 razorpay_order_id: razorpayResponse.razorpay_order_id,
                 razorpay_payment_id: razorpayResponse.razorpay_payment_id,
                 razorpay_signature: razorpayResponse.razorpay_signature,
                 order_id: orderId,
               });
               paymentDoneRef.current = true;
+              if (verifiedOrder?.id) {
+                setOrders(prev => [verifiedOrder, ...prev.filter(o => o.id !== verifiedOrder.id)]);
+              }
               clearCart();
               // FIX 1: Navigate FIRST — instant redirect, refresh runs in background
               navigate('orders');
@@ -157,7 +160,6 @@ export default function CartPage({ navigate, showToast }) {
               refreshAfterPayment(); // no await
               setPaymentLoading(false);
             }
-          }, 400);
         },
 
         onDismiss: async () => {
@@ -165,6 +167,7 @@ export default function CartPage({ navigate, showToast }) {
             const { getOrderById } = await import('@/services/orderService');
             const latestOrder = await getOrderById(orderId);
             if (latestOrder?.payment_status === 'COMPLETED') {
+              setOrders(prev => [latestOrder, ...prev.filter(o => o.id !== latestOrder.id)]);
               clearCart();
               // FIX 1: Navigate first
               navigate('orders');
@@ -279,7 +282,7 @@ export default function CartPage({ navigate, showToast }) {
             {[1,2,3,4,5,6].map(i => <div key={i} className="qb-slot-skel skeleton" />)}
           </div>
         ) : slots.length === 0 ? (
-          <p className="qb-no-slots">Ordering is Closed. Available only between 11:00 AM – 3:00 PM.</p>
+          <p className="qb-no-slots">Ordering is closed for the current canteen window.</p>
         ) : (
           <div className="qb-slots-grid">
             {slots.map(slot => {

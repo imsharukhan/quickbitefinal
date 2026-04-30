@@ -24,17 +24,19 @@ export function AppProvider({ children }) {
         if (!wsMessage) return;
  
         if (wsMessage.type === 'STATUS_UPDATE') {
-            // Instantly update order status in state — no API call needed
-            setOrders(prev => prev.map(order =>
-                order.id === wsMessage.order_id
-                    ? {
-                        ...order,
-                        status: wsMessage.status,
-                        payment_status: wsMessage.payment_status || order.payment_status,
-                    }
-                    : order
-            ));
-            // Update notifications silently in background
+            if (wsMessage.order?.id) {
+                setOrders(prev => [wsMessage.order, ...prev.filter(order => order.id !== wsMessage.order.id)]);
+            } else {
+                setOrders(prev => prev.map(order =>
+                    order.id === wsMessage.order_id
+                        ? {
+                            ...order,
+                            status: wsMessage.status,
+                            payment_status: wsMessage.payment_status || order.payment_status,
+                        }
+                        : order
+                ));
+            }
             loadNotifications();
         }
  
@@ -93,6 +95,13 @@ export function AppProvider({ children }) {
         }
     }, []);
 
+    const refreshOrdersSilently = useCallback(async () => {
+        try {
+            const data = await orderService.getMyOrders();
+            setOrders(data || []);
+        } catch (e) {}
+    }, []);
+
     const loadNotifications = useCallback(async () => {
         setIsNotifsLoading(true);
         try {
@@ -139,13 +148,18 @@ export function AppProvider({ children }) {
     }, [isLoggedIn]);
 
     useEffect(() => {
-        if (!isLoggedIn || !studentId || wsConnected) return;
+        const hasActiveOrders = orders.some(order =>
+            order.payment_status === 'COMPLETED' &&
+            !['Picked Up', 'Cancelled'].includes(order.status)
+        );
+        if (!isLoggedIn || !studentId || (wsConnected && !hasActiveOrders)) return;
         const interval = setInterval(() => {
-            loadOrders();
+            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+            refreshOrdersSilently();
             loadNotifications();
-        }, 5000);
+        }, 3000);
         return () => clearInterval(interval);
-    }, [isLoggedIn, studentId, wsConnected, loadOrders, loadNotifications]);
+    }, [isLoggedIn, studentId, wsConnected, orders, refreshOrdersSilently, loadNotifications]);
 
     const addToCart = useCallback((item, outletId, outletName) => {
         let conflict = false;

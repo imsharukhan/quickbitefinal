@@ -1,4 +1,5 @@
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 from typing import Dict, List
 
 class OrderConnectionManager:
@@ -30,7 +31,7 @@ class OrderConnectionManager:
     async def notify_student(self, user_id: str, data: dict):
         if user_id in self.student_connections:
             try:
-                await self.student_connections[user_id].send_json(data)
+                await self.student_connections[user_id].send_json(jsonable_encoder(data))
             except Exception:
                 pass
 
@@ -38,7 +39,7 @@ class OrderConnectionManager:
         if vendor_id in self.vendor_connections:
             for connection in self.vendor_connections[vendor_id]:
                 try:
-                    await connection.send_json(data)
+                    await connection.send_json(jsonable_encoder(data))
                 except Exception:
                     pass
 

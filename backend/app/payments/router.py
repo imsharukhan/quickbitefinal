@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime
 from typing import Optional
@@ -9,7 +10,7 @@ from sqlalchemy.future import select
 
 from app.auth.dependencies import get_current_user
 from app.config import settings
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.notifications.models import Notification
 from app.orders.models import Order, OrderItem
 from app.orders.service import format_order_response, get_daily_token
@@ -55,6 +56,14 @@ async def _trigger_route_transfer(db: AsyncSession, order: Order, payment_id: st
         print(f"[Razorpay Routes] Transfer failed for order {order.id}: {exc}")
 
 
+async def _trigger_route_transfer_for_order(order_id: str, payment_id: str):
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Order).where(Order.id == order_id))
+        order = result.scalars().first()
+        if order:
+            await _trigger_route_transfer(db, order, payment_id)
+
+
 async def _notify_vendor_for_order(db: AsyncSession, order: Order, payload: dict):
     outlet_res = await db.execute(select(Outlet).where(Outlet.id == order.outlet_id))
     outlet = outlet_res.scalars().first()
@@ -87,9 +96,9 @@ async def _mark_order_paid(db: AsyncSession, order: Order, payment_id: str) -> d
     ))
     await db.commit()
 
-    await _trigger_route_transfer(db, order, payment_id)
     formatted = await format_order_response(db, order)
     await _notify_vendor_for_order(db, order, {"type": "NEW_ORDER", "order": formatted})
+    asyncio.create_task(_trigger_route_transfer_for_order(order.id, payment_id))
     return formatted
 
 

@@ -4,14 +4,15 @@ from sqlalchemy import func
 from app.outlets.models import Outlet
 from app.outlets.schemas import OutletCreate, OutletUpdate
 from app.orders.models import Order, Rating
+from app.config import settings
 import pytz
 from datetime import datetime, timedelta
 
 IST = pytz.timezone('Asia/Kolkata')
 
-# Fixed order window — students can only order for 11:00 AM to 3:00 PM
-ORDER_WINDOW_START = (11, 0)   # 11:00 AM
-ORDER_WINDOW_END   = (15, 0)   # 3:00 PM
+def _parse_window_time(value: str) -> tuple[int, int]:
+    hour, minute = value.split(":", 1)
+    return int(hour), int(minute)
 
 async def create_outlet(db: AsyncSession, data: OutletCreate) -> Outlet:
     new_outlet = Outlet(
@@ -96,14 +97,16 @@ async def get_available_time_slots(db: AsyncSession, outlet_id: str, date_str: s
     if outlet.closed_dates and target_date.strftime("%Y-%m-%d") in outlet.closed_dates:
         return []
 
-    # Fixed order window: 11:00 AM to 3:00 PM IST
+    window_start = _parse_window_time(settings.ORDER_WINDOW_START)
+    window_end = _parse_window_time(settings.ORDER_WINDOW_END)
+
     order_start_dt = IST.localize(datetime(
         target_date.year, target_date.month, target_date.day,
-        ORDER_WINDOW_START[0], ORDER_WINDOW_START[1]
+        window_start[0], window_start[1]
     ))
     order_end_dt = IST.localize(datetime(
         target_date.year, target_date.month, target_date.day,
-        ORDER_WINDOW_END[0], ORDER_WINDOW_END[1]
+        window_end[0], window_end[1]
     ))
 
     # If today and already past 3:00 PM, no slots available

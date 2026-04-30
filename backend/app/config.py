@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = ""
     PLATFORM_FEE_RATE: float = 0.0236
+    ORDER_WINDOW_START: str = "15:00"
+    ORDER_WINDOW_END: str = "17:00"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

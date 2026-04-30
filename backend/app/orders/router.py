@@ -27,13 +27,21 @@ async def notify_vendor_for_outlet(db: AsyncSession, outlet_id: str, payload: di
     if vendor:
         await manager.notify_vendor(str(vendor.user_id), payload)
 
-@router.post("", response_model=schemas.OrderResponse)
+@router.post("")
 async def create_order(
     data: schemas.OrderCreate,
+    minimal: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     order = await service.create_order(db, str(current_user.id), data)
+    if minimal:
+        return {
+            "id": order.id,
+            "total_price": order.total_price,
+            "payment_status": order.payment_status,
+            "razorpay_order_id": order.razorpay_order_id,
+        }
     formatted_order = await service.format_order_response(db, order)
     return formatted_order
 
@@ -88,6 +96,7 @@ async def confirm_payment(
             "order_id": order_id,
             "status": "Preparing",
             "payment_status": "COMPLETED",
+            "order": order,
             "message": "Payment confirmed! Your food is being prepared 🍳"
         }
     )
@@ -119,6 +128,7 @@ async def update_status(
             "order_id": order_id,
             "status": data.status,
             "payment_status": order.get("payment_status", "COMPLETED"),
+            "order": order,
             "message": msg
         }
     )

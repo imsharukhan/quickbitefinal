@@ -1,7 +1,8 @@
 'use client';
 import api from './api';
-export const placeOrder = (outlet_id, items, pickup_time, total_price) => api.post('/api/orders', { outlet_id, items, pickup_time, total_price }).then(res => res.data);
+export const placeOrder = (outlet_id, items, pickup_time, total_price) => api.post('/api/orders?minimal=true', { outlet_id, items, pickup_time, total_price }).then(res => res.data);
 export const getMyOrders = () => api.get('/api/orders/my').then(res => res.data);
+export const getOrderById = (order_id) => api.get(`/api/orders/${order_id}`).then(res => res.data);
 export const getOutletOrders = (outlet_id, status, date) => {
     let url = `/api/orders/outlet/${outlet_id}?`;
     if (status) url += `status=${status}&`;
