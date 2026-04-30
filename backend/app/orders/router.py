@@ -87,7 +87,7 @@ async def confirm_payment(
             "type": "STATUS_UPDATE",
             "order_id": order_id,
             "status": "Preparing",
-            "payment_status": "PAID",
+            "payment_status": "COMPLETED",
             "message": "Payment confirmed! Your food is being prepared 🍳"
         }
     )
@@ -118,7 +118,7 @@ async def update_status(
             "type": "STATUS_UPDATE",
             "order_id": order_id,
             "status": data.status,
-            "payment_status": order.get("payment_status", "PAID"),
+            "payment_status": order.get("payment_status", "COMPLETED"),
             "message": msg
         }
     )

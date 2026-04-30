@@ -18,7 +18,7 @@ export function AppProvider({ children }) {
     const studentId = user?.id && localStorage.getItem('qb_role') !== 'vendor'
         ? user.id
         : null;
-    const { lastMessage: wsMessage } = useWebSocket('student', studentId);
+    const { lastMessage: wsMessage, isConnected: wsConnected } = useWebSocket('student', studentId);
  
     useEffect(() => {
         if (!wsMessage) return;
@@ -35,17 +35,12 @@ export function AppProvider({ children }) {
                     : order
             ));
             // Update notifications silently in background
-            setTimeout(() => {
-                loadOrders();
-                loadNotifications();
-            }, 500);
+            loadNotifications();
         }
  
         if (wsMessage.type === 'PAYMENT_CONFIRMED') {
-            setTimeout(() => {
-                loadOrders();
-                loadNotifications();
-            }, 400);
+            loadOrders();
+            loadNotifications();
         }
     }, [wsMessage]);
 
@@ -142,6 +137,15 @@ export function AppProvider({ children }) {
             hasInitialized.current = false;
         }
     }, [isLoggedIn]);
+
+    useEffect(() => {
+        if (!isLoggedIn || !studentId || wsConnected) return;
+        const interval = setInterval(() => {
+            loadOrders();
+            loadNotifications();
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [isLoggedIn, studentId, wsConnected, loadOrders, loadNotifications]);
 
     const addToCart = useCallback((item, outletId, outletName) => {
         let conflict = false;

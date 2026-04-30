@@ -23,7 +23,8 @@ export function useWebSocket(role, id) {
                 return;
             }
 
-            const baseUrl = "wss://quickbitefinal-production.up.railway.app";
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://quickbitefinal-production.up.railway.app';
+            const baseUrl = apiUrl.replace(/^http/, 'ws');
             const wsUrl = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/api/orders/ws/${role}/${id}?token=${token}`;
             
             const ws = new WebSocket(wsUrl);

@@ -62,8 +62,9 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         if existing_id:
             result = await db.execute(select(Order).where(Order.id == str(existing_id)))
             order = result.scalars().first()
-            if order and order.status not in ["Cancelled", "FAILED"]:
+            if order and order.status not in ["Cancelled", "FAILED"] and order.payment_status != "COMPLETED":
                 return order
+            redis_client.delete(f"idempotency:{key}")
         raise HTTPException(status_code=409, detail="Order is already being created. Please wait a moment.")
 
     existing_id = redis_client.get(f"idempotency:{key}")
@@ -73,14 +74,32 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
             existing_id = str(existing_id)
             result = await db.execute(select(Order).where(Order.id == existing_id))
             order = result.scalars().first()
-            if order and order.status not in ["Cancelled", "FAILED"]:
+            if order and order.status not in ["Cancelled", "FAILED"] and order.payment_status != "COMPLETED":
                 return order
+            redis_client.delete(f"idempotency:{key}")
 
-        # Also check DB directly in case Redis expired but order exists
+        stale_result = await db.execute(
+            select(Order).where(
+                Order.idempotency_key == key,
+                (
+                    (Order.payment_status == "COMPLETED")
+                    | (Order.payment_status == "FAILED")
+                    | (Order.status == "Cancelled")
+                )
+            )
+        )
+        stale_orders = stale_result.scalars().all()
+        for stale_order in stale_orders:
+            stale_order.idempotency_key = None
+        if stale_orders:
+            await db.flush()
+
+        # Also check DB directly in case Redis expired but an unpaid checkout exists.
         db_existing = await db.execute(
             select(Order).where(
                 Order.idempotency_key == key,
-                Order.status.not_in(["Cancelled", "FAILED"])
+                Order.status.not_in(["Cancelled", "FAILED"]),
+                Order.payment_status != "COMPLETED"
             )
         )
         existing_order = db_existing.scalars().first()
@@ -155,7 +174,13 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
             await db.commit()
         except IntegrityError:
             await db.rollback()
-            db_existing = await db.execute(select(Order).where(Order.idempotency_key == key))
+            db_existing = await db.execute(
+                select(Order).where(
+                    Order.idempotency_key == key,
+                    Order.payment_status != "COMPLETED",
+                    Order.status.not_in(["Cancelled", "FAILED"])
+                )
+            )
             existing_order = db_existing.scalars().first()
             if existing_order:
                 redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)

@@ -55,7 +55,8 @@ export default function VendorDashboard({ showToast }) {
     const [expandedDate, setExpandedDate] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState([]);
     const [expandedLoading, setExpandedLoading] = useState(false);
-    const { lastMessage } = useWebSocket('vendor', user?.id);
+    const [printConfirmOrder, setPrintConfirmOrder] = useState(null);
+    const { lastMessage, isConnected: wsConnected } = useWebSocket('vendor', user?.id);
  
     const loadOutlets = () => {
         outletManagementService.getMyOutlets().then(data => {
@@ -76,9 +77,9 @@ export default function VendorDashboard({ showToast }) {
         // Needed because vendor WebSocket uses outlet_id key but connects via vendor_id
         const interval = setInterval(() => {
             loadOutletData(true); // fully silent background sync
-        }, 30000);
+        }, wsConnected ? 30000 : 5000);
         return () => clearInterval(interval);
-    }, [user, selectedOutlet?.id]);
+    }, [user, selectedOutlet?.id, wsConnected]);
  
     const loadOutletData = async (silent = false) => {
         if (!selectedOutlet) return;
@@ -139,7 +140,7 @@ export default function VendorDashboard({ showToast }) {
   const printOrderBills = (order) => {
   const win = window.open('', '_blank', 'width=420,height=600');
   if (!win) {
-    alert('Pop-up blocked. Please allow pop-ups for this site to print bills.');
+    showToast?.('Print window was blocked. Please allow pop-ups for this site.', 'error');
     return;
   }
   const items = order.items || [];
@@ -325,9 +326,8 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                 const updatedOrder = await orderSvc.confirmPayment(orderId);
                 // Reconcile with real server response
                 setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-                // Auto-print both bills when vendor starts preparing
-                printOrderBills(updatedOrder);
-                showToast('Payment Confirmed! Bills printing... 🖨️', 'success');
+                setPrintConfirmOrder(updatedOrder);
+                showToast('Payment confirmed', 'success');
                 // Background stats refresh — non-blocking
                 orderSvc.getOutletStats(selectedOutlet.id)
                     .then(sData => { if (sData) setStats(sData); })
@@ -495,6 +495,42 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
  
     return (
         <div style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 12px 40px', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
+            {printConfirmOrder && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.42)',
+                    zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        width: '100%', maxWidth: '360px', background: 'white', borderRadius: '12px',
+                        padding: '20px', boxShadow: '0 20px 45px rgba(15, 23, 42, 0.24)',
+                        border: '1px solid var(--border-light)'
+                    }}>
+                        <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)' }}>
+                            Print receipt?
+                        </h3>
+                        <p style={{ margin: '0 0 18px', fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                            Do you want to print the receipt for token #{printConfirmOrder.token_number}?
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setPrintConfirmOrder(null)}
+                                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', color: 'var(--text)', fontWeight: 700, cursor: 'pointer' }}>
+                                No, Continue
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const orderToPrint = printConfirmOrder;
+                                    setPrintConfirmOrder(null);
+                                    printOrderBills(orderToPrint);
+                                }}
+                                style={{ padding: '10px 14px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
+                                Yes, Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
  
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>

@@ -16,6 +16,7 @@ from app.orders.service import format_order_response, get_daily_token
 from app.orders.websocket import manager
 from app.outlets.models import Outlet
 from app.payments.service import PaymentService
+from app.redis_client import redis_client
 from app.users.models import User
 from app.vendors.models import Vendor
 
@@ -66,6 +67,9 @@ async def _notify_vendor_for_order(db: AsyncSession, order: Order, payload: dict
 
 
 async def _mark_order_paid(db: AsyncSession, order: Order, payment_id: str) -> dict:
+    if order.idempotency_key:
+        redis_client.delete(f"idempotency:{order.idempotency_key}")
+        order.idempotency_key = None
     order.payment_status = "COMPLETED"
     order.payment_gateway_id = payment_id
     order.updated_at = datetime.utcnow()
