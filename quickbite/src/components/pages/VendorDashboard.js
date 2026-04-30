@@ -28,6 +28,23 @@ const getCategoryImg = (catName) => {
     : '/categories/other.png';
 };
 const FALLBACK_IMAGE = '/categories/other.png';
+const STATUS_RANK = {
+  Placed: 0,
+  Preparing: 1,
+  'Ready for Pickup': 2,
+  'Picked Up': 3,
+  Cancelled: 99,
+};
+
+const mergeOrderForward = (orders, incoming) => {
+  if (!incoming?.id) return orders;
+  return orders.map(order => {
+    if (order.id !== incoming.id) return order;
+    const currentRank = STATUS_RANK[order.status] ?? -1;
+    const incomingRank = STATUS_RANK[incoming.status] ?? -1;
+    return incomingRank >= currentRank ? incoming : order;
+  });
+};
  
 export default function VendorDashboard({ showToast }) {
     const { user, logout } = useAuth();
@@ -55,7 +72,6 @@ export default function VendorDashboard({ showToast }) {
     const [expandedDate, setExpandedDate] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState([]);
     const [expandedLoading, setExpandedLoading] = useState(false);
-    const [printConfirmOrder, setPrintConfirmOrder] = useState(null);
     const { lastMessage, isConnected: wsConnected } = useWebSocket('vendor', user?.id);
  
     const loadOutlets = () => {
@@ -311,22 +327,13 @@ export default function VendorDashboard({ showToast }) {
 };
 
 const handleOrderAction = async (orderId, newStatus, currentStatus) => {
+        if (actionLoading) return;
         setActionLoading(orderId);
-
-        // Optimistic update — instant UI change before API responds
-        setOrders(prev => prev.map(o => {
-            if (o.id !== orderId) return o;
-            if (currentStatus === 'Placed') return { ...o, status: 'Preparing', payment_confirmed_by_vendor: true };
-            return { ...o, status: newStatus };
-        }));
-        setActionLoading(null); // release button immediately
 
         try {
             if (currentStatus === 'Placed') {
                 const updatedOrder = await orderSvc.confirmPayment(orderId);
-                // Reconcile with real server response
-                setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-                setPrintConfirmOrder(updatedOrder);
+                setOrders(prev => mergeOrderForward(prev, updatedOrder));
                 showToast('Payment confirmed', 'success');
                 // Background stats refresh — non-blocking
                 orderSvc.getOutletStats(selectedOutlet.id)
@@ -334,13 +341,14 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                     .catch(() => {});
             } else {
                 const updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
-                setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+                setOrders(prev => mergeOrderForward(prev, updatedOrder));
                 showToast('Order updated ✅');
             }
         } catch (e) {
-            // Revert optimistic update on failure
             showToast('Failed to update order', 'error');
-            loadOutletData(); // re-sync to correct state
+            loadOutletData();
+        } finally {
+            setActionLoading(null);
         }
     };
  
@@ -495,43 +503,6 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
  
     return (
         <div style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 12px 40px', boxSizing: 'border-box', width: '100%', overflowX: 'hidden' }}>
-            {printConfirmOrder && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.42)',
-                    zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '20px'
-                }}>
-                    <div style={{
-                        width: '100%', maxWidth: '360px', background: 'white', borderRadius: '12px',
-                        padding: '20px', boxShadow: '0 20px 45px rgba(15, 23, 42, 0.24)',
-                        border: '1px solid var(--border-light)'
-                    }}>
-                        <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)' }}>
-                            Print receipt?
-                        </h3>
-                        <p style={{ margin: '0 0 18px', fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                            Do you want to print the receipt for token #{printConfirmOrder.token_number}?
-                        </p>
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                            <button
-                                onClick={() => setPrintConfirmOrder(null)}
-                                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', color: 'var(--text)', fontWeight: 700, cursor: 'pointer' }}>
-                                No, Continue
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const orderToPrint = printConfirmOrder;
-                                    setPrintConfirmOrder(null);
-                                    printOrderBills(orderToPrint);
-                                }}
-                                style={{ padding: '10px 14px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
-                                Yes, Print
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
- 
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                 {outlets.length > 1 ? (

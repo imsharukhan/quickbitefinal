@@ -20,6 +20,13 @@ import hashlib
 import json
 
 IST = pytz.timezone('Asia/Kolkata')
+STATUS_RANK = {
+    "Placed": 0,
+    "Preparing": 1,
+    "Ready for Pickup": 2,
+    "Picked Up": 3,
+    "Cancelled": 99,
+}
 
 async def get_daily_token(db: AsyncSession, outlet_id: str) -> int:
     await db.execute(select(Outlet.id).where(Outlet.id == outlet_id).with_for_update())
@@ -280,7 +287,7 @@ async def get_order_by_id(db: AsyncSession, order_id: str):
     return await format_order_response(db, order)
 
 async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id: str, payment_gateway_id: str = None):
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(select(Order).where(Order.id == order_id).with_for_update())
     order = result.scalars().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -291,6 +298,9 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
         raise HTTPException(status_code=403, detail="Not authorized")
 
     if order.status != "Placed":
+        # Idempotent duplicate Start Preparing calls must never move an order backward.
+        if order.status in ["Preparing", "Ready for Pickup", "Picked Up"]:
+            return await format_order_response(db, order)
         raise HTTPException(status_code=400, detail="Order is not in Placed status")
 
     if order.payment_status == "COMPLETED":
@@ -318,7 +328,7 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     return await format_order_response(db, order)
 
 async def update_order_status(db: AsyncSession, order_id: str, new_status: str, vendor_id: str):
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(select(Order).where(Order.id == order_id).with_for_update())
     order = result.scalars().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -329,6 +339,13 @@ async def update_order_status(db: AsyncSession, order_id: str, new_status: str, 
         raise HTTPException(status_code=403, detail="Not authorized")
         
     valid_transitions = {"Preparing": "Ready for Pickup", "Ready for Pickup": "Picked Up"}
+    current_rank = STATUS_RANK.get(order.status, -1)
+    new_rank = STATUS_RANK.get(new_status, -1)
+
+    if new_status == order.status:
+        return await format_order_response(db, order)
+    if new_rank <= current_rank:
+        raise HTTPException(status_code=400, detail="Cannot move order status backward")
     if order.status not in valid_transitions or valid_transitions[order.status] != new_status:
         raise HTTPException(status_code=400, detail="Invalid status transition")
         
