@@ -11,6 +11,7 @@ export default function OrdersPage({ navigate, showToast }) {
   const visibleOrders = orders.filter(o => o.payment_status !== 'PENDING');
   const [cancelingId, setCancelingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
 
@@ -26,6 +27,17 @@ export default function OrdersPage({ navigate, showToast }) {
     loadOrders();
     // Removed legacy interval polling; WebSocket handles real-time sync instantly!
   }, []); // Empty dependency array permanently kills infinite fetch loops
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const data = await orderService.getMyOrders();
+      setOrders(data || []);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 250);
+    }
+  };
 
   const handleCancel = async (id) => {
     if (window.confirm("Cancel this order?")) {
@@ -65,8 +77,34 @@ export default function OrdersPage({ navigate, showToast }) {
     <div className="orders-page pb-section" style={{ maxWidth: '560px', margin: '0 auto', padding: '0 16px' }}>
       <div className="menu-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: '800' }}>Your Orders</h1>
-        <button onClick={loadOrders} disabled={isOrdersLoading} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
-          <RefreshCw size={20} className={isOrdersLoading ? 'pulse-red' : ''} />
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          title="Refresh orders"
+          aria-label="Refresh orders"
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-light)',
+            background: 'var(--bg-white)',
+            color: 'var(--primary)',
+            cursor: isRefreshing ? 'default' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+            transition: 'transform 0.15s, border-color 0.15s, background 0.15s',
+            opacity: isRefreshing ? 0.75 : 1,
+          }}
+        >
+          <RefreshCw
+            size={18}
+            style={{
+              animation: isRefreshing ? 'spin 0.55s linear infinite' : 'none',
+              color: 'var(--primary)',
+            }}
+          />
         </button>
       </div>
 

@@ -28,6 +28,7 @@ const getCategoryImg = (catName) => {
     : '/categories/other.png';
 };
 const FALLBACK_IMAGE = '/categories/other.png';
+const PRINTING_ENABLED = false;
 const STATUS_RANK = {
   Placed: 0,
   Preparing: 1,
@@ -709,8 +710,8 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 ⚠️ Waiting {minsWaiting} min — confirm or cancel
                                             </div>
                                         )}
-                                        {/* Reprint button — always visible for paid orders */}
-                                        {order.payment_status === 'COMPLETED' && !['Cancelled'].includes(order.status) && (
+                                        {/* Printing is temporarily hidden. Set PRINTING_ENABLED=true to restore. */}
+                                        {PRINTING_ENABLED && order.payment_status === 'COMPLETED' && !['Cancelled'].includes(order.status) && (
                                             <div style={{ padding: '4px 16px 0' }}>
                                                 <button
                                                     onClick={() => printOrderBills(order)}
