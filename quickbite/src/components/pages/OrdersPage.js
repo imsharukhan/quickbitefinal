@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import * as orderService from '@/services/orderService';
 import { Clock, RefreshCw } from 'lucide-react';
+import * as orderService from '@/services/orderService';
 
 
 export default function OrdersPage({ navigate, showToast }) {
@@ -11,6 +11,12 @@ export default function OrdersPage({ navigate, showToast }) {
   const visibleOrders = orders.filter(o => o.payment_status !== 'PENDING');
   const [cancelingId, setCancelingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [feedbackOrder, setFeedbackOrder] = useState(null);
+  const [feedbackStars, setFeedbackStars] = useState(0);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState(false);
+  const dismissedRef = useRef(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
@@ -28,6 +34,15 @@ export default function OrdersPage({ navigate, showToast }) {
     // Removed legacy interval polling; WebSocket handles real-time sync instantly!
   }, []); // Empty dependency array permanently kills infinite fetch loops
 
+  // Auto-show feedback modal when any order becomes pick-up complete
+  useEffect(() => {
+    if (feedbackOrder || feedbackDone) return;
+    const pending = visibleOrders.find(
+      o => o.can_rate && o.status === 'Picked Up' && !dismissedRef.current.has(o.id)
+    );
+    if (pending) setFeedbackOrder(pending);
+  }, [visibleOrders]);
+
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -37,6 +52,35 @@ export default function OrdersPage({ navigate, showToast }) {
     } finally {
       setTimeout(() => setIsRefreshing(false), 250);
     }
+  };
+
+  const STAR_LABELS = ['', '😞 Poor', '😐 Okay', '🙂 Good', '😊 Great', '🤩 Amazing!'];
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackStars || feedbackSubmitting) return;
+    setFeedbackSubmitting(true);
+    try {
+      await orderService.submitFeedback(feedbackOrder.id, feedbackStars, feedbackText.trim() || null);
+      setFeedbackDone(true);
+      setTimeout(() => {
+        dismissedRef.current.add(feedbackOrder.id);
+        setFeedbackOrder(null);
+        setFeedbackDone(false);
+        setFeedbackStars(0);
+        setFeedbackText('');
+      }, 2200);
+    } catch (e) {
+      if (showToast) showToast('Could not submit feedback. Try again.', 'error');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  };
+
+  const handleFeedbackSkip = () => {
+    dismissedRef.current.add(feedbackOrder.id);
+    setFeedbackOrder(null);
+    setFeedbackStars(0);
+    setFeedbackText('');
   };
 
   const handleCancel = async (id) => {
@@ -74,6 +118,132 @@ export default function OrdersPage({ navigate, showToast }) {
   }
 
   return (
+  <>
+    {/* ── Feedback Bottom Sheet ─────────────────────────── */}
+    {feedbackOrder && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: '0',
+      }}>
+        <style>{`
+          @keyframes qb-slide-up {
+            from { transform: translateY(80px); opacity: 0; }
+            to   { transform: translateY(0);   opacity: 1; }
+          }
+          .qb-star-btn { transition: transform 0.15s, filter 0.15s; }
+          .qb-star-btn:hover { transform: scale(1.25) !important; }
+        `}</style>
+
+        <div style={{
+          background: 'white', borderRadius: '28px 28px 0 0',
+          padding: '32px 24px 44px', width: '100%', maxWidth: '560px',
+          animation: 'qb-slide-up 0.32s cubic-bezier(0.34,1.56,0.64,1)',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
+        }}>
+          {feedbackDone ? (
+            /* ── Success state ── */
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '12px' }}>🙏</div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '8px' }}>Thanks for your feedback!</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>It helps us improve for everyone.</p>
+            </div>
+          ) : (
+            <>
+              {/* Handle bar */}
+              <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'var(--border)', margin: '0 auto 24px' }} />
+
+              {/* Header */}
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <div style={{ fontSize: '2.8rem', marginBottom: '10px' }}>🎉</div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '6px' }}>Order Picked Up!</h2>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Token <strong>#{feedbackOrder.token_number}</strong> · {feedbackOrder.outlet_name}
+                </p>
+              </div>
+
+              {/* Star Rating */}
+              <p style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '14px' }}>
+                How was your experience?
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    className="qb-star-btn"
+                    onClick={() => setFeedbackStars(n)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                      fontSize: feedbackStars >= n ? '2.4rem' : '2rem',
+                      filter: feedbackStars > 0 ? (n <= feedbackStars ? 'none' : 'grayscale(1) opacity(0.3)') : 'none',
+                      transform: feedbackStars === n ? 'scale(1.3)' : 'scale(1)',
+                    }}>
+                    ⭐
+                  </button>
+                ))}
+              </div>
+              <div style={{
+                textAlign: 'center', height: '22px', marginBottom: '20px',
+                fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)',
+                transition: 'opacity 0.2s', opacity: feedbackStars ? 1 : 0,
+              }}>
+                {STAR_LABELS[feedbackStars]}
+              </div>
+
+              {/* Text area */}
+              <div style={{ position: 'relative', marginBottom: '6px' }}>
+                <textarea
+                  placeholder="Share details about your experience... (optional)"
+                  value={feedbackText}
+                  onChange={e => setFeedbackText(e.target.value)}
+                  maxLength={300}
+                  rows={3}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: '14px',
+                    border: `1.5px solid ${feedbackText ? 'var(--primary)' : 'var(--border)'}`,
+                    fontSize: '0.9rem', resize: 'none', boxSizing: 'border-box',
+                    outline: 'none', background: 'var(--bg)', color: 'var(--text)',
+                    fontFamily: 'inherit', lineHeight: 1.5, transition: 'border-color 0.2s',
+                  }}
+                />
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                {feedbackText.length}/300
+              </div>
+
+              {/* Submit */}
+              <button
+                onClick={handleFeedbackSubmit}
+                disabled={!feedbackStars || feedbackSubmitting}
+                style={{
+                  width: '100%', padding: '15px', borderRadius: '16px', border: 'none',
+                  background: feedbackStars
+                    ? 'linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%)'
+                    : 'var(--border)',
+                  color: 'white', fontWeight: 800, fontSize: '1rem',
+                  cursor: feedbackStars ? 'pointer' : 'default',
+                  marginBottom: '12px', transition: 'all 0.2s',
+                  boxShadow: feedbackStars ? '0 4px 16px rgba(var(--primary-rgb, 99,61,255),0.35)' : 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}>
+                {feedbackSubmitting
+                  ? <><div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderColor: 'rgba(255,255,255,0.4)', borderTopColor: 'white' }} /> Submitting...</>
+                  : '🚀 Submit Feedback'}
+              </button>
+              <button
+                onClick={handleFeedbackSkip}
+                style={{ width: '100%', padding: '10px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'inherit' }}>
+                Skip for now
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* ── Main Page ─────────────────────────────────────── */}
+    
     <div className="orders-page pb-section" style={{ maxWidth: '560px', margin: '0 auto', padding: '0 16px' }}>
       <div className="menu-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: '800' }}>Your Orders</h1>
@@ -220,5 +390,6 @@ export default function OrdersPage({ navigate, showToast }) {
         })}
       </div>
     </div>
-  );
+  </>
+);
 }

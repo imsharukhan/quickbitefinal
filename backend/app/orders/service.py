@@ -581,3 +581,30 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
             "revenue": round(d["revenue"], 2),
         })
     return result    
+
+async def get_outlet_feedback(db: AsyncSession, outlet_id: str) -> list:
+    from app.users.models import Student
+    stmt = (
+        select(Rating, Order, User, Student)
+        .join(Order, Rating.order_id == Order.id)
+        .join(User, Rating.user_id == User.id)
+        .outerjoin(Student, Student.user_id == User.id)
+        .where(Rating.outlet_id == outlet_id)
+        .order_by(Rating.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    feedbacks = []
+    for row in rows:
+        rating, order, user, student = row
+        feedbacks.append({
+            "id": str(rating.id),
+            "order_id": order.id,
+            "token_number": order.token_number,
+            "stars": rating.stars,
+            "review": rating.review,
+            "student_name": student.name if student else "Student",
+            "student_register_number": student.register_no if student else "—",
+            "created_at": rating.created_at,
+        })
+    return feedbacks

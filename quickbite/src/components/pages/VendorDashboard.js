@@ -83,6 +83,9 @@ export default function VendorDashboard({ showToast }) {
     const [expandedDate, setExpandedDate] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState([]);
     const [expandedLoading, setExpandedLoading] = useState(false);
+    const [feedbackData, setFeedbackData] = useState(null);
+    const [feedbackLoading, setFeedbackLoading] = useState(false);
+    const feedbackCache = useRef({});
     const { lastMessage, isConnected: wsConnected } = useWebSocket('vendor', user?.id);
  
     const loadOutlets = () => {
@@ -377,16 +380,14 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
  
             {/* Tabs */}
             <div className="dashboard-tabs">
-                {['orders', 'history', 'menu', 'profile'].map(tab => (
+                {['orders', 'history', 'feedback', 'menu', 'profile'].map(tab => (
                     <div key={tab} className={`dashboard-tab ${activeTab === tab ? 'active' : ''}`}
                         onClick={async () => {
                             setActiveTab(tab);
                             if (tab === 'history' && selectedOutlet) {
-                                // Show cached data instantly if available
                                 const cacheKey = selectedOutlet.id;
                                 const cached = historyCache.current[cacheKey];
                                 if (cached && Date.now() - cached.time < 120000) {
-                                    // Cache valid for 2 mins — instant display
                                     setHistoryData(cached.data);
                                 } else {
                                     setHistoryData([]);
@@ -402,9 +403,27 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                     } finally { setHistoryLoading(false); }
                                 }
                             }
+                            if (tab === 'feedback' && selectedOutlet) {
+                                const cacheKey = selectedOutlet.id;
+                                const cached = feedbackCache.current[cacheKey];
+                                if (cached && Date.now() - cached.time < 60000) {
+                                    setFeedbackData(cached.data);
+                                } else {
+                                    setFeedbackData(null);
+                                    setFeedbackLoading(true);
+                                    try {
+                                        const data = await orderSvc.getOutletFeedback(selectedOutlet.id);
+                                        const result = Array.isArray(data) ? data : [];
+                                        feedbackCache.current[cacheKey] = { data: result, time: Date.now() };
+                                        setFeedbackData(result);
+                                    } catch (e) {
+                                        setFeedbackData([]);
+                                    } finally { setFeedbackLoading(false); }
+                                }
+                            }
                         }}
                         style={{ textTransform: 'capitalize', flex: 1, textAlign: 'center' }}>
-                        {tab === 'orders' ? '📋' : tab === 'history' ? '📅' : tab === 'menu' ? '🍽️' : '👤'}
+                        {tab === 'orders' ? '📋' : tab === 'history' ? '📅' : tab === 'feedback' ? '💬' : tab === 'menu' ? '🍽️' : '👤'}
                     </div>
                 ))}
             </div>
@@ -708,6 +727,162 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                         </div>
                     )}
                 </div>    
+            ) : activeTab === 'feedback' ? (
+                <div>
+                    <style>{`
+                        @keyframes qb-fade-in {
+                            from { opacity: 0; transform: translateY(8px); }
+                            to   { opacity: 1; transform: translateY(0); }
+                        }
+                    `}</style>
+
+                    {feedbackLoading ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: '100px', borderRadius: 'var(--radius-lg)' }} />)}
+                        </div>
+                    ) : !feedbackData || feedbackData.length === 0 ? (
+                        <div className="empty-state" style={{ padding: '60px 20px' }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '12px', opacity: 0.35 }}>💬</div>
+                            <h3 style={{ marginBottom: '6px' }}>No feedback yet</h3>
+                            <p style={{ fontSize: '0.85rem' }}>Student feedback will appear here after orders are picked up</p>
+                        </div>
+                    ) : (() => {
+                        const avgStars = (feedbackData.reduce((s, f) => s + f.stars, 0) / feedbackData.length).toFixed(1);
+                        const positiveCount = feedbackData.filter(f => f.stars >= 4).length;
+                        const positivePct = Math.round((positiveCount / feedbackData.length) * 100);
+
+                        const timeAgo = (dateStr) => {
+                            const diff = Date.now() - new Date(dateStr + 'Z').getTime();
+                            const mins = Math.floor(diff / 60000);
+                            if (mins < 1) return 'just now';
+                            if (mins < 60) return `${mins}m ago`;
+                            const hrs = Math.floor(mins / 60);
+                            if (hrs < 24) return `${hrs}h ago`;
+                            return `${Math.floor(hrs / 24)}d ago`;
+                        };
+
+                        const STAR_COLOR = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
+
+                        return (
+                            <>
+                                {/* ── Summary Card ── */}
+                                <div style={{
+                                    background: 'linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%)',
+                                    borderRadius: 'var(--radius-lg)', padding: '20px 20px',
+                                    marginBottom: '16px', color: 'white',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    boxShadow: '0 4px 20px rgba(99,61,255,0.3)',
+                                }}>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                                            <span style={{ fontSize: '3rem', fontWeight: 900, lineHeight: 1 }}>{avgStars}</span>
+                                            <span style={{ fontSize: '1.4rem', opacity: 0.85 }}>⭐</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', opacity: 0.85, marginTop: '4px' }}>
+                                            Average rating
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '1.6rem', fontWeight: 800 }}>{feedbackData.length}</div>
+                                        <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>total reviews</div>
+                                        <div style={{
+                                            marginTop: '8px', fontSize: '0.72rem', fontWeight: 700,
+                                            background: 'rgba(255,255,255,0.2)', borderRadius: '20px',
+                                            padding: '3px 10px', display: 'inline-block',
+                                        }}>
+                                            👍 {positivePct}% positive
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── Star Distribution ── */}
+                                <div style={{
+                                    background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)',
+                                    border: '1px solid var(--border-light)', padding: '14px 16px',
+                                    marginBottom: '16px',
+                                }}>
+                                    {[5,4,3,2,1].map(star => {
+                                        const count = feedbackData.filter(f => f.stars === star).length;
+                                        const pct = feedbackData.length ? (count / feedbackData.length) * 100 : 0;
+                                        return (
+                                            <div key={star} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: star > 1 ? '8px' : 0 }}>
+                                                <span style={{ fontSize: '0.78rem', fontWeight: 700, width: '16px', color: STAR_COLOR[star], flexShrink: 0 }}>{star}★</span>
+                                                <div style={{ flex: 1, height: '7px', borderRadius: '4px', background: 'var(--border-light)', overflow: 'hidden' }}>
+                                                    <div style={{
+                                                        height: '100%', width: `${pct}%`,
+                                                        background: STAR_COLOR[star],
+                                                        borderRadius: '4px', transition: 'width 0.4s ease',
+                                                    }} />
+                                                </div>
+                                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', width: '18px', textAlign: 'right', flexShrink: 0 }}>{count}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* ── Feedback Cards ── */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {feedbackData.map((fb, idx) => (
+                                        <div key={fb.id} style={{
+                                            background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)',
+                                            border: '1px solid var(--border-light)',
+                                            overflow: 'hidden', boxShadow: 'var(--shadow)',
+                                            animation: `qb-fade-in 0.25s ease ${idx * 0.04}s both`,
+                                        }}>
+                                            {/* Card header */}
+                                            <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: fb.review ? '1px solid var(--border-light)' : 'none' }}>
+                                                {/* Token badge */}
+                                                <div style={{
+                                                    width: '46px', height: '46px', borderRadius: 'var(--radius)',
+                                                    background: 'var(--primary-bg)', border: '1.5px solid var(--primary)',
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                    justifyContent: 'center', flexShrink: 0,
+                                                }}>
+                                                    <div style={{ fontSize: '0.45rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>Token</div>
+                                                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--primary)', lineHeight: 1 }}>#{fb.token_number || '—'}</div>
+                                                </div>
+
+                                                {/* Student info */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {fb.student_name}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                                                        Reg: {fb.student_register_number}
+                                                    </div>
+                                                    {/* Star row */}
+                                                    <div style={{ display: 'flex', gap: '2px', marginTop: '4px' }}>
+                                                        {[1,2,3,4,5].map(n => (
+                                                            <span key={n} style={{ fontSize: '0.8rem', opacity: n <= fb.stars ? 1 : 0.18 }}>⭐</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Time */}
+                                                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' }}>
+                                                    {timeAgo(fb.created_at)}
+                                                </div>
+                                            </div>
+
+                                            {/* Review text */}
+                                            {fb.review && (
+                                                <div style={{ padding: '10px 14px', background: 'var(--bg)' }}>
+                                                    <p style={{
+                                                        fontSize: '0.85rem', color: 'var(--text)',
+                                                        lineHeight: 1.55, margin: 0,
+                                                        fontStyle: 'italic',
+                                                    }}>
+                                                        "{fb.review}"
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
             ) : activeTab === 'menu' ? (
                 <div>
                     <button onClick={() => setShowAddItem(!showAddItem)}
