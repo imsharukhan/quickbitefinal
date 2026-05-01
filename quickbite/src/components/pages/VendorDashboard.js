@@ -831,17 +831,6 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                         }}>
                                             {/* Card header */}
                                             <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: fb.review ? '1px solid var(--border-light)' : 'none' }}>
-                                                {/* Token badge */}
-                                                <div style={{
-                                                    width: '46px', height: '46px', borderRadius: 'var(--radius)',
-                                                    background: 'var(--primary-bg)', border: '1.5px solid var(--primary)',
-                                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                                    justifyContent: 'center', flexShrink: 0,
-                                                }}>
-                                                    <div style={{ fontSize: '0.45rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>Token</div>
-                                                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--primary)', lineHeight: 1 }}>#{fb.token_number || '—'}</div>
-                                                </div>
-
                                                 {/* Student info */}
                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                     <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

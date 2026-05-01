@@ -16,7 +16,20 @@ export default function OrdersPage({ navigate, showToast }) {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackDone, setFeedbackDone] = useState(false);
-  const dismissedRef = useRef(new Set());
+  const prevStatusRef = useRef({});
+  const isInitialLoadRef = useRef(true);
+
+  const getShownFeedbacks = () => {
+    try { return new Set(JSON.parse(localStorage.getItem('qb_fb_shown') || '[]')); }
+    catch { return new Set(); }
+  };
+  const markFeedbackHandled = (orderId) => {
+    try {
+      const shown = getShownFeedbacks();
+      shown.add(orderId);
+      localStorage.setItem('qb_fb_shown', JSON.stringify([...shown]));
+    } catch {}
+  };
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
@@ -34,13 +47,34 @@ export default function OrdersPage({ navigate, showToast }) {
     // Removed legacy interval polling; WebSocket handles real-time sync instantly!
   }, []); // Empty dependency array permanently kills infinite fetch loops
 
-  // Auto-show feedback modal when any order becomes pick-up complete
+  // Auto-show feedback ONLY when order status CHANGES to Picked Up in this session
   useEffect(() => {
     if (feedbackOrder || feedbackDone) return;
-    const pending = visibleOrders.find(
-      o => o.can_rate && o.status === 'Picked Up' && !dismissedRef.current.has(o.id)
-    );
-    if (pending) setFeedbackOrder(pending);
+
+    // First load — just record statuses, never show modal on initial render
+    if (isInitialLoadRef.current) {
+      visibleOrders.forEach(o => { prevStatusRef.current[o.id] = o.status; });
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    const shown = getShownFeedbacks();
+
+    // Only trigger for orders that JUST transitioned to Picked Up NOW (WebSocket update)
+    const justPickedUp = visibleOrders.find(o => {
+      const prev = prevStatusRef.current[o.id];
+      return (
+        o.status === 'Picked Up' &&
+        prev !== 'Picked Up' &&
+        o.can_rate &&
+        !shown.has(o.id)
+      );
+    });
+
+    // Always sync current statuses for next comparison
+    visibleOrders.forEach(o => { prevStatusRef.current[o.id] = o.status; });
+
+    if (justPickedUp) setFeedbackOrder(justPickedUp);
   }, [visibleOrders]);
 
   const handleRefresh = async () => {
@@ -61,9 +95,9 @@ export default function OrdersPage({ navigate, showToast }) {
     setFeedbackSubmitting(true);
     try {
       await orderService.submitFeedback(feedbackOrder.id, feedbackStars, feedbackText.trim() || null);
+      markFeedbackHandled(feedbackOrder.id);
       setFeedbackDone(true);
       setTimeout(() => {
-        dismissedRef.current.add(feedbackOrder.id);
         setFeedbackOrder(null);
         setFeedbackDone(false);
         setFeedbackStars(0);
@@ -77,7 +111,7 @@ export default function OrdersPage({ navigate, showToast }) {
   };
 
   const handleFeedbackSkip = () => {
-    dismissedRef.current.add(feedbackOrder.id);
+    markFeedbackHandled(feedbackOrder.id);
     setFeedbackOrder(null);
     setFeedbackStars(0);
     setFeedbackText('');
@@ -159,7 +193,7 @@ export default function OrdersPage({ navigate, showToast }) {
                 <div style={{ fontSize: '2.8rem', marginBottom: '10px' }}>🎉</div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '6px' }}>Order Picked Up!</h2>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  Token <strong>#{feedbackOrder.token_number}</strong> · {feedbackOrder.outlet_name}
+                  {feedbackOrder.outlet_name}
                 </p>
               </div>
 
@@ -176,7 +210,7 @@ export default function OrdersPage({ navigate, showToast }) {
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
                       fontSize: feedbackStars >= n ? '2.4rem' : '2rem',
-                      filter: feedbackStars > 0 ? (n <= feedbackStars ? 'none' : 'grayscale(1) opacity(0.3)') : 'none',
+                      filter: n <= feedbackStars ? 'none' : 'grayscale(1) opacity(0.35)',
                       transform: feedbackStars === n ? 'scale(1.3)' : 'scale(1)',
                     }}>
                     ⭐
