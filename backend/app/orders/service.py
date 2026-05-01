@@ -254,31 +254,119 @@ async def format_order_response(db: AsyncSession, order: Order) -> dict:
         "can_rate": order.status == "Picked Up" and rating is None,
         "token_valid_today": token_valid_today,
     }
+async def batch_format_orders(db: AsyncSession, orders: list) -> list:
+    """Single-pass batch formatter — fixes N+1. O(6 queries) regardless of order count."""
+    if not orders:
+        return []
+
+    from app.users.models import Student
+    from uuid import UUID as _UUID
+
+    order_ids  = [o.id for o in orders]
+    outlet_ids = list({str(o.outlet_id) for o in orders})
+    user_ids   = list({str(o.user_id)   for o in orders})
+
+    # 1. All order items in ONE query
+    items_res = await db.execute(
+        select(OrderItem).where(OrderItem.order_id.in_(order_ids))
+    )
+    items_by_order = {}
+    for item in items_res.scalars().all():
+        items_by_order.setdefault(str(item.order_id), []).append(item)
+
+    # 2. All outlets in ONE query
+    outlets_res = await db.execute(
+        select(Outlet).where(Outlet.id.in_(outlet_ids))
+    )
+    outlets_by_id = {str(o.id): o for o in outlets_res.scalars().all()}
+
+    # 3. All users in ONE query
+    users_res = await db.execute(
+        select(User).where(User.id.in_(user_ids))
+    )
+    users_by_id = {str(u.id): u for u in users_res.scalars().all()}
+
+    # 4. All students in ONE query
+    students_res = await db.execute(
+        select(Student).where(Student.user_id.in_(user_ids))
+    )
+    students_by_uid = {str(s.user_id): s for s in students_res.scalars().all()}
+
+    # 5. All ratings in ONE query
+    ratings_res = await db.execute(
+        select(Rating).where(Rating.order_id.in_(order_ids))
+    )
+    ratings_by_order = {str(r.order_id): r for r in ratings_res.scalars().all()}
+
+    today_ist_date = datetime.now(IST).date()
+    result = []
+
+    for order in orders:
+        outlet  = outlets_by_id.get(str(order.outlet_id))
+        user    = users_by_id.get(str(order.user_id))
+        student = students_by_uid.get(str(order.user_id))
+        rating  = ratings_by_order.get(str(order.id))
+        items   = items_by_order.get(str(order.id), [])
+
+        placed_naive = order.placed_at
+        placed_utc   = placed_naive.replace(tzinfo=pytz.UTC) if placed_naive.tzinfo is None else placed_naive
+        token_valid_today = placed_utc.astimezone(IST).date() == today_ist_date
+
+        result.append({
+            "id": order.id,
+            "outlet_id": outlet.id if outlet else order.outlet_id,
+            "outlet_name": outlet.name if outlet else "Unknown",
+            "outlet_upi_id": outlet.upi_id if outlet else None,
+            "user_id": user.id if user else order.user_id,
+            "student_name": student.name if student else "Unknown",
+            "student_register_number": student.register_no if student else "—",
+            "status": order.status,
+            "payment_status": order.payment_status,
+            "payment_confirmed_by_vendor": order.payment_confirmed_by_vendor,
+            "payment_gateway_id": order.payment_gateway_id,
+            "total_price": order.total_price,
+            "pickup_time": order.pickup_time,
+            "token_number": order.token_number,
+            "payment_method": order.payment_method,
+            "placed_at": order.placed_at,
+            "updated_at": order.updated_at,
+            "items": items,
+            "upi_deep_link": get_upi_deep_link(outlet, order) if outlet else "",
+            "can_cancel": order.status == "Placed" and order.payment_status == "PENDING",
+            "can_rate": order.status == "Picked Up" and rating is None,
+            "token_valid_today": token_valid_today,
+        })
+
+    return result
+
+
 async def get_orders_by_user(db: AsyncSession, user_id: str) -> list:
-    result = await db.execute(select(Order).where(Order.user_id == user_id).order_by(Order.placed_at.desc()))
+    result = await db.execute(
+        select(Order).where(Order.user_id == user_id).order_by(Order.placed_at.desc())
+    )
     orders = result.scalars().all()
-    return [await format_order_response(db, o) for o in orders]
+    return await batch_format_orders(db, orders)
 
 async def get_orders_by_outlet(db: AsyncSession, outlet_id: str, status: str = None, date_str: str = None) -> list:
     query = select(Order).where(Order.outlet_id == outlet_id)
     if status:
         query = query.where(Order.status == status)
-        
-    today_ist = datetime.now(IST).date()
+
+    today_ist   = datetime.now(IST).date()
     target_date = today_ist if not date_str else datetime.strptime(date_str, "%Y-%m-%d").date()
-    
+
     start_of_day = IST.localize(datetime(target_date.year, target_date.month, target_date.day))
-    end_of_day = start_of_day + timedelta(days=1)
-    
-    start_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
-    end_utc = end_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
-    
+    end_of_day   = start_of_day + timedelta(days=1)
+    start_utc    = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
+    end_utc      = end_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
+
     query = query.where(Order.placed_at >= start_utc, Order.placed_at < end_utc)
     query = query.order_by(Order.placed_at.desc())
-    
+
     result = await db.execute(query)
     orders = result.scalars().all()
-    return [await format_order_response(db, o) for o in orders]
+    # batch_format_orders: O(6 queries) instead of O(5N) — fixes N+1 and timeouts
+    return await batch_format_orders(db, orders)
 
 async def get_order_by_id(db: AsyncSession, order_id: str):
     result = await db.execute(select(Order).where(Order.id == order_id))

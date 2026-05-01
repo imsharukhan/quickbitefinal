@@ -172,16 +172,24 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         setActionLoading(orderId);
 
         try {
-            const updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
+            let updatedOrder;
+            // Placed → Preparing MUST go through confirm-payment endpoint, not /status
+            if (currentStatus === 'Placed' && newStatus === 'Preparing') {
+                updatedOrder = await orderSvc.confirmPayment(orderId);
+            } else {
+                updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
+            }
             setOrders(prev => mergeOrderForward(prev, updatedOrder));
             showToast('Order updated ✅');
-            // Background stats refresh — non-blocking
+            // Background stats refresh — non-blocking, never blocks UI
             orderSvc.getOutletStats(selectedOutlet.id)
                 .then(sData => { if (sData) setStats(sData); })
                 .catch(() => {});
         } catch (e) {
             showToast('Failed to update order', 'error');
-            loadOutletData();
+            // Don't call loadOutletData() on failure — it triggers N+1 and can timeout
+            // Just silently refresh orders in background after a small delay
+            setTimeout(() => loadOutletData(true), 1500);
         } finally {
             setActionLoading(null);
         }
