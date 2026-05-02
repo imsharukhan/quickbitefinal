@@ -641,6 +641,10 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
 
 async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
     from sqlalchemy import case, cast, Date as SADate, text
+    cache_key = f"outlet_history:{outlet_id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
     today_ist = datetime.now(IST).date()
     start_30 = today_ist - timedelta(days=29)
 
@@ -648,13 +652,14 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
     start_utc = IST.localize(datetime(start_30.year, start_30.month, start_30.day)).astimezone(pytz.UTC).replace(tzinfo=None)
     end_utc = IST.localize(datetime(today_ist.year, today_ist.month, today_ist.day) + timedelta(days=1)).astimezone(pytz.UTC).replace(tzinfo=None)
 
-    # Single query: all orders in 30-day window
+    # Single query with total_price included — eliminates second DB round trip
     orders_res = await db.execute(
         select(
             Order.id,
             Order.placed_at,
             Order.status,
             Order.payment_status,
+            Order.total_price,
         ).where(
             Order.outlet_id == outlet_id,
             Order.placed_at >= start_utc,
@@ -662,19 +667,11 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
         )
     )
     all_orders = orders_res.fetchall()
-
-    # Single query: revenue per order — use total_price (what student actually paid)
-    revenue_res = await db.execute(
-        select(Order.id, Order.total_price)
-        .where(
-            Order.outlet_id == outlet_id,
-            Order.placed_at >= start_utc,
-            Order.placed_at < end_utc,
-            Order.payment_status == "COMPLETED",
-            Order.status != "Cancelled",
-        )
-    )
-    revenue_by_order = {row.id: float(row.total_price) for row in revenue_res.fetchall()}
+    revenue_by_order = {
+        row.id: float(row.total_price)
+        for row in all_orders
+        if row.payment_status == "COMPLETED" and row.status != "Cancelled"
+    }
 
     # Group by IST date in Python (fast, no DB round trips)
     from collections import defaultdict
@@ -701,7 +698,8 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
             "completed_count": d["completed"],
             "revenue": round(d["revenue"], 2),
         })
-    return result    
+    redis_client.setex(cache_key, 60, json.dumps(result, default=str))
+    return result
 
 async def get_outlet_feedback(db: AsyncSession, outlet_id: str) -> list:
     from app.users.models import Student

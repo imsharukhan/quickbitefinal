@@ -1,11 +1,17 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey, Integer
+from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        Index('ix_orders_outlet_placed', 'outlet_id', 'placed_at'),
+        Index('ix_orders_outlet_status', 'outlet_id', 'status'),
+        Index('ix_orders_user_id', 'user_id'),
+        Index('ix_orders_payment_status', 'payment_status'),
+    )
 
     id: Mapped[str] = mapped_column(String(20), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))

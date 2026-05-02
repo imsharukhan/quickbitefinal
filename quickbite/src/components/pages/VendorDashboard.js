@@ -141,6 +141,15 @@ export default function VendorDashboard({ showToast }) {
                 opening_time: selectedOutlet.opening_time || '08:00',
                 closing_time: selectedOutlet.closing_time || '20:00',
             });
+            // Silently prefetch history 2s after load — tab opens instantly after
+            setTimeout(() => {
+                orderSvc.getOutletHistory(selectedOutlet.id)
+                    .then(data => {
+                        const result = Array.isArray(data) ? data : [];
+                        historyCache.current[selectedOutlet.id] = { data: result, time: Date.now() };
+                    })
+                    .catch(() => {});
+            }, 2000);
         }
     }, [selectedOutlet?.id]);
  
