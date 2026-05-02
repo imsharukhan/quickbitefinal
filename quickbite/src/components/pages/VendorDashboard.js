@@ -404,8 +404,17 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                             if (tab === 'history' && selectedOutlet) {
                                 const cacheKey = selectedOutlet.id;
                                 const cached = historyCache.current[cacheKey];
-                                if (cached && Date.now() - cached.time < 120000) {
-                                    setHistoryData(cached.data);
+                                if (cached && Date.now() - cached.time < 300000) {
+                                    setHistoryData(cached.data); // instant from cache
+                                } else if (cached) {
+                                    setHistoryData(cached.data); // show stale instantly
+                                    // refresh silently in background
+                                    orderSvc.getOutletHistory(selectedOutlet.id)
+                                        .then(data => {
+                                            const result = Array.isArray(data) ? data : [];
+                                            historyCache.current[cacheKey] = { data: result, time: Date.now() };
+                                            setHistoryData(result);
+                                        }).catch(() => {});
                                 } else {
                                     setHistoryData([]);
                                     setHistoryLoading(true);
@@ -423,7 +432,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                             if (tab === 'feedback' && selectedOutlet) {
                                 const cacheKey = selectedOutlet.id;
                                 const cached = feedbackCache.current[cacheKey];
-                                if (cached && Date.now() - cached.time < 60000) {
+                                if (cached && Date.now() - cached.time < 300000) {
                                     setFeedbackData(cached.data);
                                 } else {
                                     setFeedbackData(null);

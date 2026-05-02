@@ -703,6 +703,10 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
 
 async def get_outlet_feedback(db: AsyncSession, outlet_id: str) -> list:
     from app.users.models import Student
+    cache_key = f"outlet_feedback:{outlet_id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
     stmt = (
         select(Rating, Order, User, Student)
         .join(Order, Rating.order_id == Order.id)
@@ -726,4 +730,5 @@ async def get_outlet_feedback(db: AsyncSession, outlet_id: str) -> list:
             "student_register_number": student.register_no if student else "—",
             "created_at": rating.created_at,
         })
+    redis_client.setex(cache_key, 120, json.dumps(feedbacks, default=str))
     return feedbacks
