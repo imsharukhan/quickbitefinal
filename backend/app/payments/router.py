@@ -13,7 +13,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal, get_db
 from app.notifications.service import create_notification
 from app.orders.models import Order, OrderItem
-from app.orders.service import format_order_response, get_daily_token
+from app.orders.service import format_order_response, batch_format_orders, get_daily_token
 from app.orders.websocket import manager
 from app.outlets.models import Outlet
 from app.payments.service import PaymentService
@@ -41,10 +41,7 @@ async def _trigger_route_transfer(db: AsyncSession, order: Order, payment_id: st
     if not outlet or not outlet.razorpay_account_id:
         return
 
-    items_result = await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
-    order_items = items_result.scalars().all()
-    items_amount = sum(float(item.price) * item.quantity for item in order_items)
-    vendor_amount = min(items_amount, max(float(order.total_price) - float(order.platform_fee or 0), 0))
+    vendor_amount = float(order.total_price)  # full amount student paid goes to vendor
 
     try:
         PaymentService.transfer_to_canteen(
@@ -97,10 +94,12 @@ async def _mark_order_paid(db: AsyncSession, order: Order, payment_id: str) -> d
     )
     await db.commit()
 
-    formatted = await format_order_response(db, order)
+    results = await batch_format_orders(db, [order])
+    formatted = results[0]
     await _notify_vendor_for_order(db, order, {"type": "NEW_ORDER", "order": formatted})
     asyncio.create_task(_trigger_route_transfer_for_order(order.id, payment_id))
     return formatted
+
 
 
 @router.post("/create-order")
@@ -178,7 +177,9 @@ async def verify_payment(
         raise HTTPException(status_code=400, detail="Payment order mismatch")
 
     if order.payment_status == "COMPLETED":
-        return await format_order_response(db, order)
+        results = await batch_format_orders(db, [order])
+        return results[0]
+
 
     return await _mark_order_paid(db, order, data.razorpay_payment_id)
 

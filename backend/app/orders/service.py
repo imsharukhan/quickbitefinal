@@ -389,7 +389,8 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     if order.status != "Placed":
         # Idempotent duplicate Start Preparing calls must never move an order backward.
         if order.status in ["Preparing", "Ready for Pickup", "Picked Up"]:
-            return await format_order_response(db, order)
+            results = await batch_format_orders(db, [order])
+            return results[0]
         raise HTTPException(status_code=400, detail="Order is not in Placed status")
 
     if order.payment_status == "COMPLETED":
@@ -415,7 +416,8 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     )
 
     await db.commit()
-    return await format_order_response(db, order)
+    results = await batch_format_orders(db, [order])
+    return results[0]
 
 async def update_order_status(db: AsyncSession, order_id: str, new_status: str, vendor_id: str):
     result = await db.execute(select(Order).where(Order.id == order_id).with_for_update())
@@ -433,7 +435,8 @@ async def update_order_status(db: AsyncSession, order_id: str, new_status: str, 
     new_rank = STATUS_RANK.get(new_status, -1)
 
     if new_status == order.status:
-        return await format_order_response(db, order)
+        results = await batch_format_orders(db, [order])
+        return results[0]
     if new_rank <= current_rank:
         raise HTTPException(status_code=400, detail="Cannot move order status backward")
     if order.status not in valid_transitions or valid_transitions[order.status] != new_status:
@@ -452,7 +455,8 @@ async def update_order_status(db: AsyncSession, order_id: str, new_status: str, 
         await create_notification(db, str(order.user_id), msg, order.id)
         
     await db.commit()
-    return await format_order_response(db, order)
+    results = await batch_format_orders(db, [order])
+    return results[0]
 
 async def cancel_order_by_student(db: AsyncSession, order_id: str, user_id: str, reason: str = None):
     result = await db.execute(select(Order).where(Order.id == order_id))
@@ -476,7 +480,8 @@ async def cancel_order_by_student(db: AsyncSession, order_id: str, user_id: str,
     db.add(notification)
     
     await db.commit()
-    return await format_order_response(db, order)
+    results = await batch_format_orders(db, [order])
+    return results[0]
 
 async def cancel_order_by_vendor(db: AsyncSession, order_id: str, vendor_id: str, reason: str = None):
     result = await db.execute(select(Order).where(Order.id == order_id))
@@ -505,7 +510,8 @@ async def cancel_order_by_vendor(db: AsyncSession, order_id: str, vendor_id: str
     db.add(notification)
     
     await db.commit()
-    return await format_order_response(db, order)
+    results = await batch_format_orders(db, [order])
+    return results[0]
 
 async def submit_rating(db: AsyncSession, order_id: str, user_id: str, stars: int, review: str = None):
     result = await db.execute(select(Order).where(Order.id == order_id))
@@ -536,76 +542,103 @@ async def submit_rating(db: AsyncSession, order_id: str, user_id: str, stars: in
     return {"message": "Rating submitted successfully"}
 
 async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
+    """FIX: Was 7 separate queries — now 1 query. Eliminates pool exhaustion under load."""
+    from sqlalchemy import case as sa_case, literal
+ 
     today_ist = datetime.now(IST).date()
     start_of_day = IST.localize(datetime(today_ist.year, today_ist.month, today_ist.day))
     start_of_day_utc = start_of_day.astimezone(pytz.UTC).replace(tzinfo=None)
-    
-    # 1. Total Orders
-    res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id))
-    total_orders = res.scalar() or 0
-    
-    # 2. Active Orders TODAY
-    res = await db.execute(select(func.count(Order.id)).where(
-        Order.outlet_id == outlet_id,
-        Order.status.not_in(["Picked Up", "Cancelled"]),
-        Order.payment_status == "COMPLETED",
-        Order.placed_at >= start_of_day_utc
-    ))
-    active_orders = res.scalar() or 0
-    
-    # 3. Preparing Count TODAY
-    res = await db.execute(select(func.count(Order.id)).where(
-        Order.outlet_id == outlet_id,
-        Order.status == "Preparing",
-        Order.placed_at >= start_of_day_utc
-    ))
-    preparing_count = res.scalar() or 0
-    
-    # 4. Orders placed today (all paid)
-    res = await db.execute(select(func.count(Order.id)).where(
-        Order.outlet_id == outlet_id,
-        Order.payment_status == "COMPLETED",
-        Order.placed_at >= start_of_day_utc
-    ))
-    completed_today = res.scalar() or 0
-    
-    # 5. Revenue Today — exact amount student paid (includes platform fee)
+ 
     res = await db.execute(
-        select(func.sum(Order.total_price))
-        .where(
-            Order.outlet_id == outlet_id,
-            Order.status == "Picked Up",
-            Order.payment_status == "COMPLETED",
-            Order.placed_at >= start_of_day_utc
-        )
+        select(
+            # 1. Total orders ever
+            func.count(Order.id).label("total_orders"),
+ 
+            # 2. Active today (paid, not done/cancelled)
+            func.sum(
+                sa_case(
+                    (
+                        (Order.status.not_in(["Picked Up", "Cancelled"])) &
+                        (Order.payment_status == "COMPLETED") &
+                        (Order.placed_at >= start_of_day_utc),
+                        literal(1)
+                    ),
+                    else_=literal(0)
+                )
+            ).label("active_orders"),
+ 
+            # 3. Preparing today
+            func.sum(
+                sa_case(
+                    (
+                        (Order.status == "Preparing") &
+                        (Order.placed_at >= start_of_day_utc),
+                        literal(1)
+                    ),
+                    else_=literal(0)
+                )
+            ).label("preparing_count"),
+ 
+            # 4. Completed/paid today
+            func.sum(
+                sa_case(
+                    (
+                        (Order.payment_status == "COMPLETED") &
+                        (Order.placed_at >= start_of_day_utc),
+                        literal(1)
+                    ),
+                    else_=literal(0)
+                )
+            ).label("completed_today"),
+ 
+            # 5. Revenue today (picked up + paid)
+            func.sum(
+                sa_case(
+                    (
+                        (Order.status == "Picked Up") &
+                        (Order.payment_status == "COMPLETED") &
+                        (Order.placed_at >= start_of_day_utc),
+                        Order.total_price
+                    ),
+                    else_=literal(0)
+                )
+            ).label("revenue_today"),
+ 
+            # 6. Total revenue all time
+            func.sum(
+                sa_case(
+                    (
+                        (Order.status == "Picked Up") &
+                        (Order.payment_status == "COMPLETED"),
+                        Order.total_price
+                    ),
+                    else_=literal(0)
+                )
+            ).label("total_revenue"),
+ 
+            # 7. Pending payment count
+            func.sum(
+                sa_case(
+                    (Order.payment_status == "PENDING", literal(1)),
+                    else_=literal(0)
+                )
+            ).label("pending_payment_count"),
+        ).where(Order.outlet_id == outlet_id)
     )
-    revenue_today = float(res.scalar() or 0.0)
-
-    # 6. Total Revenue — exact amount student paid (includes platform fee)
-    res = await db.execute(
-        select(func.sum(Order.total_price))
-        .where(
-            Order.outlet_id == outlet_id,
-            Order.status == "Picked Up",
-            Order.payment_status == "COMPLETED",
-        )
-    )
-    total_revenue = float(res.scalar() or 0.0)
-    
-    # 7. Pending Payment Count
-    res = await db.execute(select(func.count(Order.id)).where(Order.outlet_id == outlet_id, Order.payment_status == "PENDING"))
-    pending_payment_count = res.scalar() or 0
-    
+ 
+    row = res.first()
+ 
     return {
-        "total_orders": total_orders,
-        "active_orders": active_orders,
-        "preparing_orders": preparing_count,
-        "orders_today": completed_today,
-        "revenue_today": revenue_today,
-        "total_revenue": total_revenue,
-        "pending_payment_count": pending_payment_count
+        "total_orders":          int(row.total_orders or 0),
+        "active_orders":         int(row.active_orders or 0),
+        "preparing_orders":      int(row.preparing_count or 0),
+        "orders_today":          int(row.completed_today or 0),
+        "revenue_today":         float(row.revenue_today or 0.0),
+        "total_revenue":         float(row.total_revenue or 0.0),
+        "pending_payment_count": int(row.pending_payment_count or 0),
     }
-    
+
+
 async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
     from sqlalchemy import case, cast, Date as SADate, text
     today_ist = datetime.now(IST).date()

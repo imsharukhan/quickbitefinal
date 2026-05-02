@@ -16,13 +16,14 @@ engine = create_async_engine(
     final_db_url,
     connect_args={
         "statement_cache_size": 0,
-        # No SSL for Railway — it handles TLS at network level
+        "server_settings": {"jit": "off"},   # prevents asyncpg JIT memory spikes
+        "timeout": 30,                        # connection timeout in seconds
     },
-    pool_size=10,
-    max_overflow=20,
-    pool_recycle=300,
-    pool_pre_ping=True,
-    pool_timeout=30,
+    pool_size=5,          # was 10 — Railway hobby DB has ~25 max connections, keep headroom
+    max_overflow=10,      # was 20 — total max 15 connections, safe for Railway
+    pool_recycle=120,     # was 300 — Railway drops idle connections after ~2min, recycle before that
+    pool_pre_ping=True,   # validates connection before use — fixes ConnectionDoesNotExistError
+    pool_timeout=20,      # was 30 — fail faster, don't queue forever
     echo=False
 )
 

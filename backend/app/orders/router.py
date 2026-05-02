@@ -42,8 +42,8 @@ async def create_order(
             "payment_status": order.payment_status,
             "razorpay_order_id": order.razorpay_order_id,
         }
-    formatted_order = await service.format_order_response(db, order)
-    return formatted_order
+    results = await service.batch_format_orders(db, [order])
+    return results[0]   
 
 @router.get("/my", response_model=list[schemas.OrderResponse])
 async def get_my_orders(

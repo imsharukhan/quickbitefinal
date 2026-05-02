@@ -179,6 +179,9 @@ async def lifespan(app: FastAPI):
         "CREATE INDEX IF NOT EXISTS idx_orders_user_placed ON orders (user_id, placed_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_orders_outlet_day ON orders (outlet_id, placed_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_orders_razorpay_order ON orders (razorpay_order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications (user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders (outlet_id, payment_status)",
     ]
     try:
         from sqlalchemy import text
