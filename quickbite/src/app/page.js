@@ -89,16 +89,16 @@ export default function Page() {
   }, []);
 
   // ── Toast helper ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!liveNotif) return;
-    showToast(liveNotif.message, liveNotif.type || 'info');
-  }, [liveNotif]);
-
   const showToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   };
+
+  useEffect(() => {
+    if (!liveNotif) return;
+    showToast(liveNotif.message, liveNotif.type || 'info');
+  }, [liveNotif]);
 
   // ── Navigate ──────────────────────────────────────────────────────
   const navigate = (page, data) => {

@@ -30,8 +30,34 @@ export default function CartPage({ navigate, showToast }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => { loadRazorpayScript(); }, []);
+
+  // Restore pending order if mobile browser reloaded the tab after GPay
+  useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    const savedOrderId = sessionStorage.getItem('gng_pending_order');
+    if (!savedOrderId || paymentDoneRef.current) return;
+    activeOrderIdRef.current = savedOrderId;
+    const token = localStorage.getItem('qb_token');
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/orders/${savedOrderId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.payment_status === 'COMPLETED' && !paymentDoneRef.current) {
+          paymentDoneRef.current = true;
+          sessionStorage.removeItem('gng_pending_order');
+          setOrders(prev => [data, ...prev.filter(o => o.id !== data.id)]);
+          clearCart();
+          navigate('orders');
+          showToast('Payment successful! 🎉', 'success');
+          refreshAfterPayment();
+        }
+      })
+      .catch(() => {});
+  }, []);
   const activeOrderIdRef = useRef(null);
   const paymentDoneRef = useRef(false);
+  const rzpInstanceRef = useRef(null);
 
   useEffect(() => {
     const handleVisibility = async () => {
@@ -45,9 +71,10 @@ export default function CartPage({ navigate, showToast }) {
             const data = await res.json();
             if (data?.payment_status === 'COMPLETED') {
               paymentDoneRef.current = true;
+              sessionStorage.removeItem('gng_pending_order');
+              try { rzpInstanceRef.current?.close(); } catch (_) {}
               setOrders(prev => [data, ...prev.filter(o => o.id !== data.id)]);
               clearCart();
-              // FIX 1: Navigate FIRST — don't wait for refresh to complete
               navigate('orders');
               showToast('Payment successful! 🎉', 'success');
               refreshAfterPayment(); // runs in background, no await
@@ -116,6 +143,7 @@ export default function CartPage({ navigate, showToast }) {
       const orderId = createdOrder?.id;
       activeOrderIdRef.current = orderId;
       paymentDoneRef.current = false;
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('gng_pending_order', orderId);
 
       if (!orderId) {
         showToast('Order creation failed. Please try again.', 'error');
@@ -127,7 +155,7 @@ export default function CartPage({ navigate, showToast }) {
       const rzpData = await paymentService.createPaymentOrder(orderId);
       setLoading(false);
 
-      openRazorpayCheckout({
+      rzpInstanceRef.current = openRazorpayCheckout({
         rzpData,
         orderId,
         userName: user?.student_profile?.name || user?.name || '',
@@ -143,6 +171,7 @@ export default function CartPage({ navigate, showToast }) {
                 order_id: orderId,
               });
               paymentDoneRef.current = true;
+              sessionStorage.removeItem('gng_pending_order');
               if (verifiedOrder?.id) {
                 setOrders(prev => [verifiedOrder, ...prev.filter(o => o.id !== verifiedOrder.id)]);
               }
@@ -167,9 +196,11 @@ export default function CartPage({ navigate, showToast }) {
             const { getOrderById } = await import('@/services/orderService');
             const latestOrder = await getOrderById(orderId);
             if (latestOrder?.payment_status === 'COMPLETED') {
+              paymentDoneRef.current = true;
+              sessionStorage.removeItem('gng_pending_order');
+              try { rzpInstanceRef.current?.close(); } catch (_) {}
               setOrders(prev => [latestOrder, ...prev.filter(o => o.id !== latestOrder.id)]);
               clearCart();
-              // FIX 1: Navigate first
               navigate('orders');
               showToast('Payment successful! 🎉', 'success');
               refreshAfterPayment(); // no await

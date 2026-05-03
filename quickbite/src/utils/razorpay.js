@@ -52,6 +52,7 @@ export const openRazorpayCheckout = ({
       if (onDismiss) onDismiss();
     });
     rzp.open();
+    return rzp;
   } catch (e) {
     console.error('Razorpay open failed:', e);
     if (onDismiss) onDismiss();

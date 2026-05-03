@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
+import * as notificationService from '@/services/notificationService';
 
 function formatRelativeTime(dateString) {
   if (!dateString) return '';
@@ -15,7 +16,6 @@ function formatRelativeTime(dateString) {
   return date.toLocaleDateString();
 }
 
-// SVG icons — no emoji, no text placeholders
 const BellIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -52,44 +52,65 @@ const CancelIcon = ({ size = 18, color = 'currentColor' }) => (
 );
 
 const ArrowIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 12h14M12 5l7 7-7 7"/>
-  </svg>
-);
-
-const CheckAllIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12 7 17 22 7"/><path d="M16 7 11 12"/>
   </svg>
 );
 
 function getNotifMeta(message = '') {
   const msg = message.toLowerCase();
   if (msg.includes('ready') || msg.includes('pickup'))
-    return { Icon: ReadyIcon, bg: '#E8F5EC', color: '#2B8A3E', label: 'Ready' };
+    return { Icon: ReadyIcon, bg: '#E8F5EC', color: '#2B8A3E' };
   if (msg.includes('confirmed') || msg.includes('payment') || msg.includes('paid'))
-    return { Icon: PayIcon, bg: '#E8F0FE', color: '#2B7DE9', label: 'Paid' };
+    return { Icon: PayIcon, bg: '#E8F0FE', color: '#2B7DE9' };
   if (msg.includes('prepar') || msg.includes('cooking') || msg.includes('making'))
-    return { Icon: CookIcon, bg: '#FFF8E1', color: '#E8A317', label: 'Prep' };
+    return { Icon: CookIcon, bg: '#FFF8E1', color: '#E8A317' };
   if (msg.includes('cancel'))
-    return { Icon: CancelIcon, bg: '#FDECEA', color: '#D63031', label: 'Cancelled' };
-  return { Icon: BellIcon, bg: '#FFF3E6', color: '#FC8019', label: 'Update' };
+    return { Icon: CancelIcon, bg: '#FDECEA', color: '#D63031' };
+  return { Icon: BellIcon, bg: '#FFF3E6', color: '#FC8019' };
 }
 
 export default function NotificationsPage({ navigate }) {
-  const { notifications, markNotificationRead, markAllNotificationsRead, isNotifsLoading, setNotifications } = useApp();
-  const [markingAll, setMarkingAll] = useState(false);
+  const {
+    notifications, setNotifications,
+    markNotificationRead, markAllNotificationsRead,
+    isNotifsLoading,
+  } = useApp();
 
+  const [markingAll, setMarkingAll]   = useState(false);
+  const [clearing, setClearing]       = useState(false);
+  // tracks which ids are fading out
+  const [fadingIds, setFadingIds]     = useState(new Set());
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const hasAny      = notifications.length > 0;
+  const hasUnread   = unreadCount > 0;
+
+  // ── Mark all read — keeps list, just flips is_read ─────────────────
   const handleMarkAllRead = async () => {
     if (markingAll) return;
     setMarkingAll(true);
-    // Optimistic
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     try { await markAllNotificationsRead(); } catch (_) {}
     finally { setMarkingAll(false); }
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  // ── Clear all — fade out then empty ────────────────────────────────
+  const handleClearAll = async () => {
+    if (clearing) return;
+    setClearing(true);
+    // mark all as read first (backend)
+    try { await markAllNotificationsRead(); } catch (_) {}
+    // fade all out
+    const allIds = new Set(notifications.map(n => n.id));
+    setFadingIds(allIds);
+    // after css transition (300ms), clear state
+    setTimeout(() => {
+      setNotifications([]);
+      setFadingIds(new Set());
+      setClearing(false);
+    }, 350);
+  };
 
   if (isNotifsLoading && notifications.length === 0) {
     return (
@@ -103,25 +124,49 @@ export default function NotificationsPage({ navigate }) {
     <div style={{ maxWidth: '560px', margin: '0 auto', padding: '0 16px 120px' }}>
       <style>{notifStyles}</style>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="nf-header">
         <div>
           <h1 className="nf-title">Notifications</h1>
           <p className="nf-sub">
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            {hasUnread ? `${unreadCount} unread` : hasAny ? 'All caught up' : 'Nothing here yet'}
           </p>
         </div>
-        {notifications.length > 0 && unreadCount > 0 && (
-          <button className="nf-mark-all-btn" onClick={handleMarkAllRead} disabled={markingAll}>
-            <CheckAllIcon />
-            {markingAll ? 'Saving...' : 'Mark all read'}
-          </button>
+
+        {/* Buttons — logic:
+            - Mark all read: only when there are unread
+            - Clear all: always when there's anything            */}
+        {hasAny && (
+          <div className="nf-btn-group">
+            {hasUnread && (
+              <button
+                className="nf-btn nf-btn-read"
+                onClick={handleMarkAllRead}
+                disabled={markingAll || clearing}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12 7 17 22 7"/><path d="M16 7 11 12"/>
+                </svg>
+                {markingAll ? 'Saving…' : 'Mark all read'}
+              </button>
+            )}
+            <button
+              className="nf-btn nf-btn-clear"
+              onClick={handleClearAll}
+              disabled={clearing || markingAll}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+              </svg>
+              {clearing ? 'Clearing…' : 'Clear all'}
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Empty state */}
-      {notifications.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      {/* ── Empty ── */}
+      {!hasAny && (
+        <div style={{ textAlign: 'center', padding: '64px 20px' }}>
           <div style={{
             width: '64px', height: '64px', borderRadius: '50%',
             background: '#FFF3E6', display: 'flex', alignItems: 'center',
@@ -129,34 +174,37 @@ export default function NotificationsPage({ navigate }) {
           }}>
             <BellIcon size={28} color="#FC8019" />
           </div>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '6px' }}>All quiet here</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.87rem' }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text)' }}>
+            All quiet here
+          </h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             Order something and we'll keep you posted.
           </p>
         </div>
-      ) : (
+      )}
+
+      {/* ── List ── */}
+      {hasAny && (
         <div className="nf-list">
           {notifications.map(notif => {
             const { Icon, bg, color } = getNotifMeta(notif.message);
             const isClickable = !!notif.related_order_id;
+            const isFading    = fadingIds.has(notif.id);
             return (
               <div
                 key={notif.id}
-                className={`nf-item ${!notif.is_read ? 'unread' : ''} ${isClickable ? 'clickable' : ''}`}
+                className={`nf-item${!notif.is_read ? ' unread' : ''}${isClickable ? ' clickable' : ''}${isFading ? ' fading' : ''}`}
                 onClick={() => {
                   if (!notif.is_read) markNotificationRead(notif.id);
                   if (isClickable && navigate) navigate('orders');
                 }}
               >
-                {/* Icon bubble */}
                 <div className="nf-icon-bubble" style={{ background: bg }}>
                   <Icon size={17} color={color} />
                 </div>
-
-                {/* Body */}
                 <div className="nf-body">
                   <p className="nf-msg">{notif.message}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
                     <span className="nf-time">{formatRelativeTime(notif.created_at)}</span>
                     {isClickable && (
                       <span className="nf-view-btn">
@@ -165,9 +213,7 @@ export default function NotificationsPage({ navigate }) {
                     )}
                   </div>
                 </div>
-
-                {/* Unread dot */}
-                {!notif.is_read && <div className="nf-unread-dot" />}
+                {!notif.is_read && <div className="nf-dot" />}
               </div>
             );
           })}
@@ -180,10 +226,10 @@ export default function NotificationsPage({ navigate }) {
 const notifStyles = `
 .nf-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 20px 0 18px;
   gap: 12px;
+  padding: 20px 0 18px;
 }
 .nf-title {
   font-size: 1.3rem;
@@ -194,33 +240,55 @@ const notifStyles = `
 .nf-sub {
   font-size: 0.78rem;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 3px;
   font-weight: 500;
 }
-.nf-mark-all-btn {
+
+/* Button group — stacks the two buttons vertically, right-aligned */
+.nf-btn-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.nf-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 7px 13px;
   border-radius: 999px;
-  border: 1.5px solid var(--border);
-  background: white;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.18s;
-  flex-shrink: 0;
+  border: 1.5px solid transparent;
 }
-.nf-mark-all-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-.nf-mark-all-btn:disabled {
+.nf-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+.nf-btn-read {
+  background: white;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.nf-btn-read:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.nf-btn-clear {
+  background: #FFF0F0;
+  border-color: rgba(214,48,49,0.25);
+  color: var(--red, #D63031);
+}
+.nf-btn-clear:hover:not(:disabled) {
+  background: var(--red, #D63031);
+  border-color: var(--red, #D63031);
+  color: white;
+}
+
 .nf-list {
   display: flex;
   flex-direction: column;
@@ -235,11 +303,17 @@ const notifStyles = `
   border: 1px solid var(--border-light);
   border-radius: 16px;
   position: relative;
-  transition: all 0.18s;
+  transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.18s;
+  opacity: 1;
+}
+.nf-item.fading {
+  opacity: 0;
+  transform: translateX(16px);
+  pointer-events: none;
 }
 .nf-item.unread {
   background: #FFFAF5;
-  border-color: rgba(252,128,25,0.25);
+  border-color: rgba(252,128,25,0.22);
 }
 .nf-item.clickable {
   cursor: pointer;
@@ -247,6 +321,9 @@ const notifStyles = `
 .nf-item.clickable:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.nf-item.fading.clickable:hover {
+  transform: translateX(16px);
 }
 .nf-icon-bubble {
   width: 38px;
@@ -257,10 +334,7 @@ const notifStyles = `
   justify-content: center;
   flex-shrink: 0;
 }
-.nf-body {
-  flex: 1;
-  min-width: 0;
-}
+.nf-body { flex: 1; min-width: 0; }
 .nf-msg {
   font-size: 0.875rem;
   color: var(--text);
@@ -280,7 +354,7 @@ const notifStyles = `
   font-weight: 700;
   color: var(--primary);
 }
-.nf-unread-dot {
+.nf-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
