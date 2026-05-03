@@ -132,12 +132,44 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
 
         subtotal = 0.0
         order_items_to_create = []
+        # Batch daily-limit check — single query regardless of item count
+        limited_ids = [
+            str(item_input.menu_item_id)
+            for item_input in data.items
+            if menu_items.get(str(item_input.menu_item_id)) and menu_items[str(item_input.menu_item_id)].daily_limit is not None
+        ]
+        today_counts = {}
+        if limited_ids:
+            today_ist = datetime.now(IST).date()
+            limit_start_utc = IST.localize(datetime(today_ist.year, today_ist.month, today_ist.day)).astimezone(pytz.UTC).replace(tzinfo=None)
+            limit_end_utc = limit_start_utc + timedelta(days=1)
+            counts_res = await db.execute(
+                select(OrderItem.menu_item_id, func.sum(OrderItem.quantity).label('total'))
+                .join(Order, Order.id == OrderItem.order_id)
+                .where(
+                    OrderItem.menu_item_id.in_(limited_ids),
+                    Order.payment_status == 'COMPLETED',
+                    Order.placed_at >= limit_start_utc,
+                    Order.placed_at < limit_end_utc,
+                )
+                .group_by(OrderItem.menu_item_id)
+            )
+            today_counts = {str(row.menu_item_id): int(row.total) for row in counts_res.fetchall()}
+
         for item_input in data.items:
             menu_item = menu_items.get(str(item_input.menu_item_id))
             if not menu_item:
                 raise HTTPException(status_code=400, detail="Menu item not found")
             if not menu_item.is_available:
                 raise HTTPException(status_code=400, detail=f"{menu_item.name} is currently unavailable")
+            # Daily limit guard
+            if menu_item.daily_limit is not None:
+                current_count = today_counts.get(str(menu_item.id), 0)
+                remaining = menu_item.daily_limit - current_count
+                if remaining <= 0:
+                    raise HTTPException(status_code=400, detail=f"{menu_item.name} has sold out for today")
+                if item_input.quantity > remaining:
+                    raise HTTPException(status_code=400, detail=f"Only {remaining} {menu_item.name}(s) left for today")
 
             subtotal += float(menu_item.price) * item_input.quantity
             order_items_to_create.append(OrderItem(
@@ -416,6 +448,7 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     )
 
     await db.commit()
+    redis_client.delete(f"outlet_history:{str(order.outlet_id)}")
     results = await batch_format_orders(db, [order])
     return results[0]
 
@@ -455,6 +488,7 @@ async def update_order_status(db: AsyncSession, order_id: str, new_status: str, 
         await create_notification(db, str(order.user_id), msg, order.id)
         
     await db.commit()
+    redis_client.delete(f"outlet_history:{outlet_id}")
     results = await batch_format_orders(db, [order])
     return results[0]
 
@@ -680,7 +714,8 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
     for order in all_orders:
         placed_utc = order.placed_at.replace(tzinfo=pytz.UTC) if order.placed_at.tzinfo is None else order.placed_at
         placed_ist = placed_utc.astimezone(IST).date()
-        day_map[placed_ist]["count"] += 1
+        if order.payment_status == "COMPLETED":  # exclude ghost PENDING orders from count
+            day_map[placed_ist]["count"] += 1
         if order.status == "Picked Up":
             day_map[placed_ist]["completed"] += 1
         if order.id in revenue_by_order:

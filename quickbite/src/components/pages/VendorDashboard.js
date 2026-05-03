@@ -73,7 +73,9 @@ export default function VendorDashboard({ showToast }) {
     const [actionLoading, setActionLoading] = useState(null);
     const [revenueVisible, setRevenueVisible] = useState(true);
     const [showAddItem, setShowAddItem] = useState(false);
-    const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
+    const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false, daily_limit: '' });
+    const [editLimitId, setEditLimitId] = useState(null);
+    const [editLimitValue, setEditLimitValue] = useState('');
     const [outletForm, setOutletForm] = useState({ upi_id: '', opening_time: '', closing_time: '' });
     const [historyData, setHistoryData] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -247,11 +249,15 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         setMenu(prev => [...prev, optimisticItem]);
         setShowAddItem(false);
         const savedItem = { ...newItem };
-        setNewItem({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false });
+        setNewItem({ name: '', description: '', price: '', category: 'Breakfast', is_veg: true, is_bestseller: false, daily_limit: '' });
         showToast('Item added ✅');
 
         try {
-            const added = await menuMgmt.addMenuItem(selectedOutlet.id, { ...savedItem, price: parseFloat(savedItem.price) });
+            const added = await menuMgmt.addMenuItem(selectedOutlet.id, {
+                ...savedItem,
+                price: parseFloat(savedItem.price),
+                daily_limit: savedItem.daily_limit ? parseInt(savedItem.daily_limit) : null,
+            });
             setMenu(prev => prev.map(m => m.id === tempId ? added : m));
             invalidateMenuCache(selectedOutlet.id); // students see new item immediately
         } catch (e) {
@@ -755,7 +761,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 </div>
                                             ) : (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                                                    {expandedOrders.map(order => (
+                                                    {expandedOrders.filter(o => o.payment_status === 'COMPLETED' || o.status === 'Cancelled').map(order => (
                                                         <div key={order.id} style={{ background: 'var(--bg-white)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                             {/* Token badge */}
                                                             <div style={{
@@ -790,7 +796,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                     ))}
                                                     {/* Day summary footer */}
                                                     <div style={{ padding: '10px 16px', background: 'var(--bg)', display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                                                        <span>{expandedOrders.length} total • {expandedOrders.filter(o => o.status === 'Picked Up').length} completed • {expandedOrders.filter(o => o.status === 'Cancelled').length} cancelled</span>
+                                                        <span>{expandedOrders.filter(o => o.payment_status === 'COMPLETED' || o.status === 'Cancelled').length} total • {expandedOrders.filter(o => o.status === 'Picked Up').length} completed • {expandedOrders.filter(o => o.status === 'Cancelled').length} cancelled</span>
                                                         <span style={{ color: 'var(--green)' }}>₹{day.revenue.toFixed(0)} earned</span>
                                                     </div>
                                                 </div>
@@ -1027,6 +1033,12 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                 onChange={e => setNewItem({ ...newItem, price: e.target.value })}
                                 style={inputStyle}
                             />
+                            <input type="number" placeholder="Daily Limit — e.g. 30 (leave blank for unlimited)"
+                                value={newItem.daily_limit}
+                                onChange={e => setNewItem({ ...newItem, daily_limit: e.target.value })}
+                                style={inputStyle}
+                                min="1"
+                            />
                             <input type="text" placeholder="Description (optional)"
                                 value={newItem.description}
                                 onChange={e => setNewItem({ ...newItem, description: e.target.value })}
@@ -1085,11 +1097,47 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 {item.is_bestseller && <span style={{ fontSize: '0.65rem', background: 'var(--primary)', color: 'white', padding: '1px 5px', borderRadius: 'var(--radius-sm)', fontWeight: 700 }}>★ BEST</span>}
                                             </div>
                                             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>₹{item.price}</div>
+                                        {item.daily_limit && (
+                                            <div style={{ fontSize: '0.68rem', fontWeight: 600, color: (item.orders_today || 0) >= item.daily_limit ? 'var(--red)' : 'var(--text-muted)' }}>
+                                                {item.orders_today || 0}/{item.daily_limit} today
+                                            </div>
+                                        )}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                                             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: item.is_available ? 'var(--green)' : 'var(--text-muted)' }}>
-                                                {item.is_available ? 'Available' : 'Sold Out'}
+                                                {item.is_available ? 'Available' : (item.daily_limit && (item.orders_today || 0) >= item.daily_limit ? 'Limit Reached' : 'Sold Out')}
                                             </span>
+                                            {/* Inline limit editor */}
+                                            {editLimitId === item.id ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                    <input type="number" value={editLimitValue} min="1"
+                                                        onChange={e => setEditLimitValue(e.target.value)}
+                                                        placeholder="∞"
+                                                        autoFocus
+                                                        style={{ width: '50px', padding: '3px 5px', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', fontSize: '0.72rem', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+                                                    />
+                                                    <button onClick={async () => {
+                                                        const newLimit = editLimitValue.trim() === '' ? null : parseInt(editLimitValue);
+                                                        if (editLimitValue.trim() !== '' && (isNaN(newLimit) || newLimit < 1)) { showToast('Enter a valid number', 'error'); return; }
+                                                        setEditLimitId(null);
+                                                        setMenu(prev => prev.map(m => m.id === item.id ? { ...m, daily_limit: newLimit } : m));
+                                                        try {
+                                                            await menuMgmt.updateMenuItem(item.id, { daily_limit: newLimit });
+                                                            invalidateMenuCache(selectedOutlet.id);
+                                                            showToast('Limit updated ✅');
+                                                        } catch {
+                                                            setMenu(prev => prev.map(m => m.id === item.id ? { ...m, daily_limit: item.daily_limit } : m));
+                                                            showToast('Failed', 'error');
+                                                        }
+                                                    }} style={{ padding: '3px 6px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>✓</button>
+                                                    <button onClick={() => setEditLimitId(null)} style={{ padding: '3px 6px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--bg)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>✕</button>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => { setEditLimitId(item.id); setEditLimitValue(item.daily_limit ? String(item.daily_limit) : ''); }}
+                                                    style={{ padding: '3px 7px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-muted)', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                                    {item.daily_limit ? `Limit: ${item.daily_limit}` : 'Set Limit'}
+                                                </button>
+                                            )}
                                             <div onClick={() => handleToggleMenu(item.id)}
                                                 style={{ width: '40px', height: '22px', borderRadius: '11px', cursor: 'pointer', transition: 'background 0.2s', position: 'relative', background: item.is_available ? 'var(--primary)' : 'var(--border)' }}>
                                                 <div style={{ position: 'absolute', top: '3px', left: item.is_available ? '21px' : '3px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />

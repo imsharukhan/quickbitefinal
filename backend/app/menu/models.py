@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey
+from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -19,5 +19,6 @@ class MenuItem(Base):
     # FIX: Separate "deleted" from "sold out" — is_deleted=True means truly gone,
     # is_available=False means sold out (visible but greyed, can be toggled back)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    daily_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

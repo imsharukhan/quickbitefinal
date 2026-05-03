@@ -30,6 +30,15 @@ export default function OrdersPage({ navigate, showToast }) {
       localStorage.setItem('qb_fb_shown', JSON.stringify([...shown]));
     } catch {}
   };
+  // Persists prevStatusRef across remounts — survives in-app navigation
+  const getSessionStatuses = () => {
+    try { return JSON.parse(sessionStorage.getItem('qb_order_prev_statuses') || '{}'); }
+    catch { return {}; }
+  };
+  const saveSessionStatuses = (statuses) => {
+    try { sessionStorage.setItem('qb_order_prev_statuses', JSON.stringify(statuses)); }
+    catch {}
+  };
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
@@ -45,38 +54,47 @@ export default function OrdersPage({ navigate, showToast }) {
   useEffect(() => {
     loadOrders();
     // Removed legacy interval polling; WebSocket handles real-time sync instantly!
-  }, []); // Empty dependency array permanently kills infinite fetch loops
+  }, []);
 
-  // Auto-show feedback ONLY when order status CHANGES to Picked Up in this session
   useEffect(() => {
     if (feedbackOrder || feedbackDone) return;
 
-    // First load — just record statuses, never show modal on initial render
     if (isInitialLoadRef.current) {
-      visibleOrders.forEach(o => { prevStatusRef.current[o.id] = o.status; });
+      // On every mount — restore persisted statuses from sessionStorage first
+      // This means remounts (in-app nav back to Orders) inherit what was last seen
+      // Prevents re-triggering for orders already in "Picked Up" before this mount
+      const persisted = getSessionStatuses();
+      const merged = { ...persisted };
+      // Current orders set the baseline — any order already "Picked Up" on mount
+      // is treated as already-seen, never triggers the modal
+      visibleOrders.forEach(o => { merged[o.id] = o.status; });
+      prevStatusRef.current = merged;
+      saveSessionStatuses(merged);
       isInitialLoadRef.current = false;
       return;
     }
 
     const shown = getShownFeedbacks();
 
-    // Only trigger for orders that JUST transitioned to Picked Up NOW (WebSocket update)
+    // Only trigger for orders that JUST transitioned to Picked Up in this live session
     const justPickedUp = visibleOrders.find(o => {
       const prev = prevStatusRef.current[o.id];
       return (
         o.status === 'Picked Up' &&
         prev !== 'Picked Up' &&
-        o.can_rate &&
+        (o.can_rate !== false) &&
         !shown.has(o.id)
       );
     });
 
-    // Always sync current statuses for next comparison
+    // Sync and persist for next comparison and next mount
     visibleOrders.forEach(o => { prevStatusRef.current[o.id] = o.status; });
+    saveSessionStatuses(prevStatusRef.current);
 
     if (justPickedUp) setFeedbackOrder(justPickedUp);
   }, [visibleOrders]);
 
+   
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -172,7 +190,8 @@ export default function OrdersPage({ navigate, showToast }) {
 
         <div style={{
           background: 'white', borderRadius: '28px 28px 0 0',
-          padding: '32px 24px 44px', width: '100%', maxWidth: '560px',
+          padding: '32px 24px calc(env(safe-area-inset-bottom, 0px) + 80px)',
+          width: '100%', maxWidth: '560px',
           animation: 'qb-slide-up 0.32s cubic-bezier(0.34,1.56,0.64,1)',
           boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
         }}>

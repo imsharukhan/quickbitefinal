@@ -11,6 +11,7 @@ class MenuItemCreate(BaseModel):
     is_veg: bool
     is_bestseller: bool = False
     image_url: Optional[str] = None
+    daily_limit: Optional[int] = Field(None, gt=0)
 
 class MenuItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -21,6 +22,7 @@ class MenuItemUpdate(BaseModel):
     is_bestseller: Optional[bool] = None
     is_available: Optional[bool] = None
     image_url: Optional[str] = None
+    daily_limit: Optional[int] = Field(None, ge=0)  # 0 = remove limit
 
 class MenuItemResponse(BaseModel):
     id: UUID
@@ -33,3 +35,8 @@ class MenuItemResponse(BaseModel):
     is_available: bool
     is_bestseller: bool
     image_url: Optional[str]
+    daily_limit: Optional[int] = None
+    orders_today: int = 0  # computed — 0 default for toggle/update responses
+
+    class Config:
+        from_attributes = True
