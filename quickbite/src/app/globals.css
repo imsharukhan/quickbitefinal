@@ -132,6 +132,9 @@ img {
   font-weight: 500;
   color: var(--text-secondary);
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .nav-link:hover {

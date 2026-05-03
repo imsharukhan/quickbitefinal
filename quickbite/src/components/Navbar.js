@@ -58,11 +58,9 @@ export default function Navbar({ currentPage, navigate }) {
     return (
         <nav className="navbar">
             <div className="navbar-brand" onClick={() => navigate('home')}>
-                <div className="navbar-brand-icon">
-                    <svg width="20" height="14" viewBox="0 0 40 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <text x="0" y="22" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="800" fontSize="20" fill="white" letterSpacing="-0.5">GNG</text>
-                    </svg>
-                </div>
+                <div className="navbar-brand-icon" style={{ fontSize: '0.78rem', fontWeight: 800, letterSpacing: '0.3px', lineHeight: 1 }}>
+    GNG
+</div>
                 Grab N Go
             </div>
 

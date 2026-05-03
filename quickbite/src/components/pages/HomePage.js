@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import * as outletService from '@/services/outletService';
+import { getGreeting } from '@/data/greetings';
 
 const formatTime = (time) => {
   if (!time) return '';
@@ -31,42 +32,6 @@ const StarIcon = () => (
     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
   </svg>
 );
-
-function getGreeting(name) {
-  const hourStr = new Date().toLocaleTimeString('en-US', {
-    timeZone: 'Asia/Kolkata', hour12: false,
-  });
-  const hour = parseInt(hourStr.split(':')[0]);
-  const firstName = name ? name.split(' ')[0] : null;
-  const nameStr = firstName ? `, ${firstName}` : '';
-
-  if (hour >= 5 && hour < 12) {
-    return {
-      salutation: `Morning${nameStr}.`,
-      sub: 'Beat the breakfast rush — pre-order before you leave.',
-    };
-  } else if (hour >= 12 && hour < 15) {
-    return {
-      salutation: `Hungry${nameStr}?`,
-      sub: 'Lunch queue? Not today. Order ahead, pick up in minutes.',
-    };
-  } else if (hour >= 15 && hour < 18) {
-    return {
-      salutation: `Afternoon${nameStr}.`,
-      sub: "Evening snack time. What's the craving?",
-    };
-  } else if (hour >= 18 && hour < 21) {
-    return {
-      salutation: `Evening${nameStr}.`,
-      sub: "Dinner sorted. Pick a canteen and we'll have it ready.",
-    };
-  } else {
-    return {
-      salutation: `Still up${nameStr}?`,
-      sub: "Late-night munchies covered. See what's still open.",
-    };
-  }
-}
 
 export default function HomePage({ navigate }) {
   const { user } = useAuth();
@@ -122,7 +87,7 @@ export default function HomePage({ navigate }) {
   const closedOutlets = filtered.filter(o => !isOutletEffectivelyOpen(o));
 
   return (
-    <div className="page-container animate-fade-in" style={{ paddingTop: '80px' }}>
+    <div className="page-container animate-fade-in" style={{ paddingTop: 'var(--page-top-pad, 80px)' }}>
 
       {/* ── Greeting Hero ── */}
       <div style={{ padding: '28px 0 24px' }}>
@@ -323,12 +288,18 @@ export default function HomePage({ navigate }) {
         </>
       )}
 
+      <div style={{ paddingBottom: '40px' }} />
       <style>{`
+        :root { --page-top-pad: 80px; }
+        @media (max-width: 768px) { :root { --page-top-pad: 68px; } }
         .custom-outlet-grid {
           display: grid;
           grid-template-columns: 1fr;
           gap: 16px;
           margin-bottom: 28px;
+        }
+        @media (max-width: 768px) {
+          .custom-outlet-grid { margin-bottom: 80px; }
         }
         @media (min-width: 640px) {
           .custom-outlet-grid { grid-template-columns: repeat(2, 1fr); }
