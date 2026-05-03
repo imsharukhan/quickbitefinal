@@ -33,6 +33,7 @@ const BACK_MAP = {
 
 export default function Page() {
   const { isLoggedIn, role, isLoading, mustChangePassword } = useAuth();
+  const { liveNotif } = useApp();
   const [authPage, setAuthPage]           = useState('login');
   const [currentPage, setCurrentPage]     = useState('home');
   const [selectedOutlet, setSelectedOutlet] = useState(null);
@@ -88,6 +89,11 @@ export default function Page() {
   }, []);
 
   // ── Toast helper ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!liveNotif) return;
+    showToast(liveNotif.message, liveNotif.type || 'info');
+  }, [liveNotif]);
+
   const showToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -116,7 +122,7 @@ export default function Page() {
       case 'menu':          return <MenuPage outlet={selectedOutlet} navigate={navigate} showToast={showToast} />;
       case 'cart':          return <CartPage navigate={navigate} showToast={showToast} />;
       case 'orders':        return <OrdersPage navigate={navigate} />;
-      case 'notifications': return <NotificationsPage />;
+      case 'notifications': return <NotificationsPage navigate={navigate} />;
       case 'profile':       return <ProfilePage navigate={navigate} />;
       case 'budget':        return <BudgetPage navigate={navigate} />;
       case 'admin':         return <AdminPage />;

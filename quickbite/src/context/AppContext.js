@@ -47,15 +47,29 @@ export function AppProvider({ children }) {
                 ));
             }
             loadNotifications();
+            // Popup toast for status changes
+            const status = wsMessage.status || wsMessage.order?.status;
+            const statusMessages = {
+                'Confirmed':  'Order confirmed! Get ready.',
+                'Preparing':  'Your food is being prepared now.',
+                'Ready':      'Your order is ready for pickup!',
+                'Cancelled':  'Your order was cancelled.',
+                'Picked Up':  'Enjoy your meal!',
+            };
+            if (status && statusMessages[status]) {
+                setLiveNotif({ message: statusMessages[status], type: status === 'Cancelled' ? 'error' : status === 'Ready' ? 'success' : 'info', ts: Date.now() });
+            }
         }
- 
+
         if (wsMessage.type === 'PAYMENT_CONFIRMED') {
             loadOrders();
             loadNotifications();
+            setLiveNotif({ message: 'Payment confirmed! Your order is placed.', type: 'success', ts: Date.now() });
         }
 
         if (wsMessage.type === 'NEW_NOTIFICATION' && wsMessage.notification?.id) {
             setNotifications(prev => dedupeNotifications([wsMessage.notification, ...prev]));
+            setLiveNotif({ message: wsMessage.notification.message, type: 'info', ts: Date.now() });
         }
     }, [wsMessage]);
 
@@ -66,6 +80,7 @@ export function AppProvider({ children }) {
     const [lastPlacedOrder, setLastPlacedOrder] = useState(null);
     const [isOrdersLoading, setIsOrdersLoading] = useState(false);
     const [isNotifsLoading, setIsNotifsLoading] = useState(false);
+    const [liveNotif, setLiveNotif] = useState(null);
     const isSubmittingRef = useRef(false);
     const hasInitialized = useRef(false);
 
@@ -232,10 +247,14 @@ export function AppProvider({ children }) {
     };
 
     const markNotificationRead = async (id) => {
+        // Optimistic — clear immediately so badge drops instantly
+        setNotifications(prev => dedupeNotifications(prev.map(n => n.id === id ? { ...n, is_read: true } : n)));
         try {
-            const updated = await notificationService.markAsRead(id);
-            setNotifications(prev => dedupeNotifications(prev.map(n => n.id === id ? updated : n)));
-        } catch(e) {}
+            await notificationService.markAsRead(id);
+        } catch(e) {
+            // Revert only on failure
+            setNotifications(prev => dedupeNotifications(prev.map(n => n.id === id ? { ...n, is_read: false } : n)));
+        }
     };
 
     const markAllNotificationsRead = async () => {
@@ -254,7 +273,8 @@ export function AppProvider({ children }) {
             orders, setOrders, placeOrder, loadOrders, refreshAfterPayment, isOrdersLoading,
             upiDeepLink, setUpiDeepLink, lastPlacedOrder, setLastPlacedOrder,
             notifications, setNotifications, loadNotifications, markNotificationRead, markAllNotificationsRead,
-            unreadCount, isNotifsLoading, isSubmittingRef
+            unreadCount, isNotifsLoading, isSubmittingRef,
+            liveNotif
         }}>
             {children}
         </AppContext.Provider>
