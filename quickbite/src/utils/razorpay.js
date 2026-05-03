@@ -24,7 +24,7 @@ export const openRazorpayCheckout = ({
     key: rzpData.key_id,
     amount: rzpData.amount,
     currency: rzpData.currency || 'INR',
-    name: 'QuickBite',
+    name: 'Grab N Go',
     description: `Order #${orderId}`,
     order_id: rzpData.razorpay_order_id,
     prefill: { name: userName || '', email: userEmail || '' },

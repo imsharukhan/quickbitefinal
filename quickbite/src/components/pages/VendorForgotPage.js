@@ -122,7 +122,7 @@ export default function VendorForgotPage({ navigate }) {
       <div className="auth-card">
         <div className="auth-logo">
           <div style={{ background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '4px' }}>Q</div>
-          <span>QuickBite</span>
+          <span>Grab N Go</span>
         </div>
 
         {step === 1 && (

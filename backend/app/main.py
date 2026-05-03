@@ -209,7 +209,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="QuickBite API", lifespan=lifespan)
+app = FastAPI(title="Grab N Go API", lifespan=lifespan)
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -229,7 +229,7 @@ app.add_middleware(
 
 @app.get("/")
 async def health_check():
-    return {"status": "ok", "app": "QuickBite API"}
+    return {"status": "ok", "app": "Grab N Go API"}
 
 app.include_router(auth_router,          prefix="/api/auth",          tags=["auth"])
 app.include_router(users_router,         prefix="/api/users",         tags=["users"])

@@ -10,7 +10,7 @@ export default function Navbar({ currentPage, navigate }) {
         <nav className="navbar">
             <div className="navbar-brand" onClick={() => navigate('home')}>
                 <div className="navbar-brand-icon">Q</div>
-                QuickBite
+                Grab N Go
             </div>
 
             <div className="navbar-center">

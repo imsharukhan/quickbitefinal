@@ -50,7 +50,7 @@ export default function VendorChangePasswordPage() {
       <div className="auth-card">
         <div className="auth-logo">
           <div style={{ background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '4px' }}>Q</div>
-          <span>QuickBite</span>
+          <span>Grab N Go</span>
         </div>
         
         <h2 className="auth-title">Welcome! Set Your Password 👋</h2>

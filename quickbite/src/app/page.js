@@ -84,7 +84,7 @@ export default function Page() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#fff' }}>
         <div className="spinner" style={{ borderColor: 'rgba(252, 128, 25, 0.2)', borderTopColor: '#FC8019', width: '40px', height: '40px', borderWidth: '4px' }}></div>
-        <h2 style={{ color: '#FC8019', marginTop: '16px', fontWeight: 'bold' }}>QuickBite</h2>
+        <h2 style={{ color: '#FC8019', marginTop: '16px', fontWeight: 'bold' }}>Grab N Go</h2>
       </div>
     );
   }
