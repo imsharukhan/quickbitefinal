@@ -317,10 +317,10 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         return null;
         }
         // Payment confirmed by Razorpay — vendor starts preparing
-        return { label: '🍳 Start Preparing', newStatus: 'Preparing', bg: 'var(--green)', color: 'white' };
+        return { label: 'Start Preparing', newStatus: 'Preparing', bg: 'var(--green)', color: 'white' };
     }
-    if (status === 'Preparing') return { label: '🔔 Mark Ready', newStatus: 'Ready for Pickup', bg: 'var(--primary)', color: 'white' };
-    if (status === 'Ready for Pickup') return { label: '✓ Complete', newStatus: 'Picked Up', bg: '#1b5e20', color: 'white' };
+    if (status === 'Preparing') return { label: 'Mark Ready', newStatus: 'Ready for Pickup', bg: 'var(--primary)', color: 'white' };
+    if (status === 'Ready for Pickup') return { label: 'Complete', newStatus: 'Picked Up', bg: '#1b5e20', color: 'white' };
     return null;
     };
  
@@ -371,24 +371,46 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginBottom: '20px' }}>
                 {[
-                    { label: 'Today', value: stats.orders_today || 0, color: 'var(--primary)' },
-                    { label: 'Active', value: stats.active_orders || 0, color: 'var(--blue)' },
-                    { label: 'Preparing', value: stats.preparing_orders || 0, color: 'var(--yellow)' },
-                    { label: 'Revenue', value: revenueVisible ? `₹${stats.revenue_today || 0}` : '₹***', color: 'var(--green)', toggle: true },
+                    {
+                        label: 'Today', value: stats.orders_today || 0, color: 'var(--primary)', iconBg: 'var(--primary-bg)',
+                        icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    },
+                    {
+                        label: 'Active', value: stats.active_orders || 0, color: 'var(--blue)', iconBg: 'var(--blue-bg)',
+                        icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+                    },
+                    {
+                        label: 'Preparing', value: stats.preparing_orders || 0, color: 'var(--yellow)', iconBg: 'var(--yellow-bg)',
+                        icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    },
+                    {
+                        label: 'Revenue', value: revenueVisible ? `₹${stats.revenue_today || 0}` : '₹ ···', color: 'var(--green)', iconBg: 'var(--green-bg)', toggle: true,
+                        icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                    },
                 ].map((s, i) => (
                     <div key={i} style={{
                         background: 'var(--bg-white)', border: '1px solid var(--border-light)',
-                        borderRadius: 'var(--radius)', padding: '14px 16px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                        borderRadius: 'var(--radius-lg)', padding: '14px 16px',
+                        display: 'flex', alignItems: 'center', gap: '12px',
                     }}>
-                        <div>
-                            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: s.color }}>{s.value}</div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>{s.label}</div>
+                        <div style={{
+                            width: '36px', height: '36px', borderRadius: 'var(--radius)',
+                            background: s.iconBg, color: s.color,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                            {s.icon}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{s.label}</div>
+                            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: s.color, lineHeight: 1.25 }}>{s.value}</div>
                         </div>
                         {s.toggle && (
                             <button onClick={() => setRevenueVisible(!revenueVisible)}
-                                style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem' }}>
-                                {revenueVisible ? '🙈' : '👁️'}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                {revenueVisible
+                                    ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                    : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                }
                             </button>
                         )}
                     </div>
@@ -397,7 +419,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
  
             {/* Tabs */}
             <div className="dashboard-tabs">
-                {['orders', 'history', 'feedback', 'menu', 'profile'].map(tab => (
+                {['orders', 'history', 'menu', 'profile', 'feedback'].map(tab => (
                     <div key={tab} className={`dashboard-tab ${activeTab === tab ? 'active' : ''}`}
                         onClick={async () => {
                             setActiveTab(tab);
@@ -448,8 +470,32 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                 }
                             }
                         }}
-                        style={{ textTransform: 'capitalize', flex: 1, textAlign: 'center' }}>
-                        {tab === 'orders' ? '📋' : tab === 'history' ? '📅' : tab === 'feedback' ? '💬' : tab === 'menu' ? '🍽️' : '👤'}
+                        style={{}}>
+                        {tab === 'orders' ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                                <path d="M9 12h6M9 16h4"/>
+                            </svg>
+                            ) : tab === 'history' ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="9"/>
+                                <polyline points="12 7 12 12 15 15"/>
+                            </svg>
+                            ) : tab === 'menu' ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18M3 12h18M3 18h18"/>
+                            </svg>
+                            ) : tab === 'profile' ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                            </svg>
+                            ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            )}
                     </div>
                 ))}
             </div>
@@ -540,18 +586,19 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                             }}>{order.status}</div>
                                         </div>
                                         {order.payment_status === 'PENDING' && order.status === 'Placed' ? (
-                                            <div style={{ padding: '8px 16px', background: '#FFF3E0' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E65100' }}>
-                                                    ⏳ Waiting for student payment...
-                                                </span>
+                                            <div style={{ padding: '8px 16px', background: '#FFF3E0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#E65100" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E65100' }}>Waiting for student payment</span>
                                             </div>
                                         ) : order.status === 'Cancelled' ? (
-                                            <div style={{ padding: '8px 16px', background: 'var(--red-bg)' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--red)' }}>❌ Cancelled</span>
+                                            <div style={{ padding: '8px 16px', background: 'var(--red-bg)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--red)' }}>Cancelled</span>
                                             </div>
                                         ) : (
-                                            <div style={{ padding: '8px 16px', background: 'var(--green-bg)' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>✅ Payment Confirmed</span>
+                                            <div style={{ padding: '8px 16px', background: 'var(--green-bg)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>Payment Confirmed</span>
                                             </div>
                                         )}
                                         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light)' }}>
@@ -571,8 +618,9 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                                         </div>
                                         {isGhost && (
-                                            <div style={{ padding: '6px 16px', background: 'var(--red-bg)', fontSize: '0.75rem', color: 'var(--red)', fontWeight: 600 }}>
-                                                ⚠️ Waiting {minsWaiting} min — confirm or cancel
+                                            <div style={{ padding: '8px 16px', background: 'var(--red-bg)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--red)', fontWeight: 600 }}>Waiting {minsWaiting} min — confirm or cancel</span>
                                             </div>
                                         )}
                                         {(action || order.status === 'Placed') && (
@@ -580,8 +628,9 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 {order.status === 'Placed' && (
                                                     <button onClick={() => handleCancelOrder(order.id)} disabled={isLoading}
                                                         className={isGhost ? 'pulse-red' : ''}
-                                                        style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                                                        ❌ Cancel
+                                                        style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                                                        Cancel
                                                     </button>
                                                 )}
                                                 {action && (
@@ -755,12 +804,6 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                 </div>    
             ) : activeTab === 'feedback' ? (
                 <div>
-                    <style>{`
-                        @keyframes qb-fade-in {
-                            from { opacity: 0; transform: translateY(8px); }
-                            to   { opacity: 1; transform: translateY(0); }
-                        }
-                    `}</style>
 
                     {feedbackLoading ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -793,11 +836,11 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                             <>
                                 {/* ── Summary Card ── */}
                                 <div style={{
-                                    background: 'linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%)',
-                                    borderRadius: 'var(--radius-lg)', padding: '20px 20px',
+                                    background: 'var(--primary)',
+                                    borderRadius: 'var(--radius-lg)', padding: '20px',
                                     marginBottom: '16px', color: 'white',
                                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    boxShadow: '0 4px 20px rgba(99,61,255,0.3)',
+                                    boxShadow: '0 2px 12px rgba(252,128,25,0.25)',
                                 }}>
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
@@ -853,7 +896,6 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                             background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)',
                                             border: '1px solid var(--border-light)',
                                             overflow: 'hidden', boxShadow: 'var(--shadow)',
-                                            animation: `qb-fade-in 0.25s ease ${idx * 0.04}s both`,
                                         }}>
                                             {/* Card header */}
                                             <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: fb.review ? '1px solid var(--border-light)' : 'none' }}>
@@ -1053,8 +1095,8 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                                                 <div style={{ position: 'absolute', top: '3px', left: item.is_available ? '21px' : '3px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
                                             </div>
                                             <button onClick={() => handleDeleteItem(item.id, item.name)}
-                                                style={{ background: 'var(--red-bg)', border: 'none', color: 'var(--red)', borderRadius: 'var(--radius-sm)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>
-                                                🗑️
+                                                style={{ background: 'var(--red-bg)', border: 'none', color: 'var(--red)', borderRadius: 'var(--radius-sm)', padding: '7px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                                             </button>
                                         </div>
                                     </div>
@@ -1088,7 +1130,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                             {/* Outlet Name */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
-                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>🏪</div>
+                                <div style={{ width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Outlet Name</div>
                                     <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedOutlet?.name || '—'}</div>
@@ -1097,7 +1139,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                             {/* UPI ID */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
-                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>💳</div>
+                                <div style={{ width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>UPI ID</div>
                                     <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{selectedOutlet?.upi_id || '—'}</div>
@@ -1106,7 +1148,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                             {/* Outlet Status — toggle button */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
-                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>📍</div>
+                                <div style={{ width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Outlet Status</div>
                                     <div style={{ marginTop: '8px' }}>
@@ -1124,7 +1166,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                             {/* Hours — editable */}
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
-                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0, marginTop: '2px' }}>🕐</div>
+                                <div style={{ width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px', color: 'var(--text-muted)' }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg></div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '10px' }}>Operating Hours</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginBottom: '10px' }}>
@@ -1151,7 +1193,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                             {/* Holiday / Closed Dates */}
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', paddingBottom: '14px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)' }}>
-                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0, marginTop: '2px' }}>📅</div>
+                                <div style={{ width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px', color: 'var(--text-muted)' }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '10px' }}>Holiday / Closed Days</div>
                                     <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
@@ -1209,7 +1251,7 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
 
                             {/* Menu Items */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center', flexShrink: 0 }}>📋</div>
+                                <div style={{ width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Menu Items</div>
                                     <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginTop: '2px' }}>{menu.length} items</div>
@@ -1220,7 +1262,8 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                     </div>
                     <button onClick={handleLogout}
                         style={{ width: '100%', padding: '14px', borderRadius: 'var(--radius)', border: '1px solid var(--red)', background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        🚪 Logout
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
                     </button>
                 </div>
             ) : null}

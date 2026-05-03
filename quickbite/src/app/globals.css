@@ -1770,25 +1770,29 @@ img {
 
 .dashboard-tabs {
   display: flex;
-  gap: 0;
-  border-bottom: 2px solid var(--border);
+  gap: 4px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 4px;
   margin-bottom: 20px;
 }
 
 .dashboard-tab {
-  padding: 10px 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 0;
   color: var(--text-muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .dashboard-tab.active {
+  background: var(--primary-bg);
   color: var(--primary);
-  border-bottom-color: var(--primary);
 }
 
 .token-badge {
