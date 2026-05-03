@@ -123,7 +123,12 @@ export default function VendorDashboard({ showToast }) {
                 orderSvc.getOutletStats(selectedOutlet.id).catch(() => stats)
             ]);
             setOrders(prev => mergeOrderListForward(prev, oData || []));
-            setMenu(mData || []);
+            setMenu(prev => {
+                // Don't overwrite if there's a pending optimistic item (temp_ prefix)
+                // — background sync was racing with the save API call and wiping it
+                const hasPending = prev.some(m => String(m.id).startsWith('temp_'));
+                return hasPending ? prev : (mData || []);
+            });
             if (sData) setStats(sData);
         } catch (e) { console.error(e); }
         finally { if (!silent) setLoading(false); }
@@ -1046,10 +1051,6 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
                             />
  
                             <div style={{ display: 'flex', gap: '16px', marginBottom: '14px' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem' }}>
-                                    <input type="checkbox" checked={newItem.is_veg} onChange={e => setNewItem({ ...newItem, is_veg: e.target.checked })} />
-                                    🟢 Vegetarian
-                                </label>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem' }}>
                                     <input type="checkbox" checked={newItem.is_bestseller} onChange={e => setNewItem({ ...newItem, is_bestseller: e.target.checked })} />
                                     ★ Bestseller
