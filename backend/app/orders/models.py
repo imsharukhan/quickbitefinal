@@ -33,6 +33,12 @@ class Order(Base):
 
 class OrderItem(Base):
     __tablename__ = "order_items"
+    __table_args__ = (
+        Index('ix_order_items_order_id', 'order_id'),
+        Index('ix_order_items_menu_item_id', 'menu_item_id'),
+        # Composite for the daily count query in menu service
+        Index('ix_order_items_menu_item_order', 'menu_item_id', 'order_id'),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
@@ -44,6 +50,10 @@ class OrderItem(Base):
 
 class Rating(Base):
     __tablename__ = "ratings"
+    __table_args__ = (
+        Index('ix_ratings_outlet_id', 'outlet_id'),
+        Index('ix_ratings_user_id', 'user_id'),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))

@@ -27,13 +27,47 @@ async def create_menu_item(db: AsyncSession, outlet_id: str, data: MenuItemCreat
     await db.refresh(item)
     return item
 
+
+import json
+from typing import Optional
+
+MENU_CACHE_TTL = 45  # seconds — short enough to reflect limit changes
+
+_redis_client = None
+
+async def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        import redis.asyncio as aioredis
+        from app.config import settings
+        _redis_client = aioredis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            max_connections=10,  # shared pool, not per-call
+        )
+    return _redis_client
+
 async def get_menu_by_outlet(db: AsyncSession, outlet_id: str, include_unavailable: bool = False) -> list:
     from app.orders.models import Order, OrderItem as OI
 
-    query = select(MenuItem).where(
+    # Cache only student-facing view (vendor needs live data)
+    cache_key = f"menu:outlet:{outlet_id}"
+    if not include_unavailable:
+        try:
+            redis = await _get_redis()
+            cached = await redis.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass  # Redis down = fall through to DB, never crash
+
+    conditions = [
         MenuItem.outlet_id == outlet_id,
-        MenuItem.is_deleted == False
-    ).order_by(MenuItem.category)
+        MenuItem.is_deleted == False,
+    ]
+    if not include_unavailable:
+        conditions.append(MenuItem.is_available == True)
+    query = select(MenuItem).where(*conditions).order_by(MenuItem.category)
     result = await db.execute(query)
     items = list(result.scalars().all())
 
@@ -78,6 +112,12 @@ async def get_menu_by_outlet(db: AsyncSession, outlet_id: str, include_unavailab
             "orders_today": orders_today,
         })
 
+    if not include_unavailable:
+        try:
+            redis = await _get_redis()
+            await redis.setex(cache_key, MENU_CACHE_TTL, json.dumps(result_list, default=str))
+        except Exception:
+            pass
     return result_list
 
 async def get_menu_item(db: AsyncSession, id: str) -> MenuItem | None:
@@ -92,9 +132,17 @@ async def update_menu_item(db: AsyncSession, id: str, data: MenuItemUpdate) -> M
         return None
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        # daily_limit=0 means "remove limit" → store as NULL
+        if key == "daily_limit" and value == 0:
+            value = None
         setattr(item, key, value)
     await db.commit()
     await db.refresh(item)
+    try:
+        redis = await _get_redis()
+        await redis.delete(f"menu:outlet:{item.outlet_id}")
+    except Exception:
+        pass
     return item
 
 async def toggle_availability(db: AsyncSession, id: str) -> MenuItem | None:
@@ -104,6 +152,11 @@ async def toggle_availability(db: AsyncSession, id: str) -> MenuItem | None:
     item.is_available = not item.is_available
     await db.commit()
     await db.refresh(item)
+    try:
+        redis = await _get_redis()
+        await redis.delete(f"menu:outlet:{item.outlet_id}")
+    except Exception:
+        pass
     return item
 
 async def delete_menu_item(db: AsyncSession, id: str) -> bool:

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey, Integer
+from sqlalchemy import String, Boolean, Float, DateTime, ForeignKey, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -22,3 +22,7 @@ class MenuItem(Base):
     daily_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_menu_items_outlet_id", "outlet_id"),
+    )
