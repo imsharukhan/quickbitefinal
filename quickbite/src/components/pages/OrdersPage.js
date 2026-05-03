@@ -38,7 +38,7 @@ export default function OrdersPage({ navigate, showToast }) {
   
   const generateUpiLink = (order) => {
     const upiId = order.outlet_upi_id || 'sharukhansharukhan926@oksbi';
-    const name = encodeURIComponent(order.outlet_name || 'QuickBite');
+    const name = encodeURIComponent(order.outlet_name || 'Grab N Go');
     return `upi://pay?pa=${upiId}&pn=${name}&am=${order.total_price}&cu=INR`;
   };
 
