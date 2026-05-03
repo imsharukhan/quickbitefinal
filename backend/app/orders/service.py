@@ -64,18 +64,18 @@ def get_upi_deep_link(outlet: Outlet, order: Order) -> str:
 async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
     key = generate_idempotency_key(user_id, data.outlet_id, data.pickup_time, data.items)
     lock_key = f"checkout_lock:{key}"
-    lock_acquired = redis_client.set(lock_key, user_id, ex=30, nx=True)
+    lock_acquired = await redis_client.set(lock_key, user_id, ex=30, nx=True)
     if not lock_acquired:
-        existing_id = redis_client.get(f"idempotency:{key}")
+        existing_id = await redis_client.get(f"idempotency:{key}")
         if existing_id:
             result = await db.execute(select(Order).where(Order.id == str(existing_id)))
             order = result.scalars().first()
             if order and order.status not in ["Cancelled", "FAILED"] and order.payment_status != "COMPLETED":
                 return order
-            redis_client.delete(f"idempotency:{key}")
+            await redis_client.delete(f"idempotency:{key}")
         raise HTTPException(status_code=409, detail="Order is already being created. Please wait a moment.")
 
-    existing_id = redis_client.get(f"idempotency:{key}")
+    existing_id = await redis_client.get(f"idempotency:{key}")
 
     try:
         if existing_id:
@@ -84,7 +84,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
             order = result.scalars().first()
             if order and order.status not in ["Cancelled", "FAILED"] and order.payment_status != "COMPLETED":
                 return order
-            redis_client.delete(f"idempotency:{key}")
+            await redis_client.delete(f"idempotency:{key}")
 
         stale_result = await db.execute(
             select(Order).where(
@@ -112,7 +112,7 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
         )
         existing_order = db_existing.scalars().first()
         if existing_order:
-            redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
+            await redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
             return existing_order
 
         result = await db.execute(select(Outlet).where(Outlet.id == data.outlet_id))
@@ -223,15 +223,15 @@ async def create_order(db: AsyncSession, user_id: str, data: OrderCreate):
             )
             existing_order = db_existing.scalars().first()
             if existing_order:
-                redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
+                await redis_client.set(f"idempotency:{key}", existing_order.id, ex=300)
                 return existing_order
             raise
         await db.refresh(order)
 
-        redis_client.set(f"idempotency:{key}", order.id, ex=300)
+        await redis_client.set(f"idempotency:{key}", order.id, ex=300)
         return order
     finally:
-        redis_client.delete(lock_key)
+        await redis_client.delete(lock_key)
 
 async def format_order_response(db: AsyncSession, order: Order) -> dict:
     result = await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
@@ -440,6 +440,10 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     order.status = "Preparing"
     order.updated_at = datetime.utcnow()
 
+    # Assign token number at confirmation time (not at placement — avoids wasted tokens on failed payments)
+    if order.token_number is None:
+        order.token_number = await get_daily_token(db, str(order.outlet_id))
+
     await create_notification(
         db,
         str(order.user_id),
@@ -448,7 +452,7 @@ async def confirm_payment_and_prepare(db: AsyncSession, order_id: str, vendor_id
     )
 
     await db.commit()
-    redis_client.delete(f"outlet_history:{str(order.outlet_id)}")
+    await redis_client.delete(f"outlet_history:{str(order.outlet_id)}")
     results = await batch_format_orders(db, [order])
     return results[0]
 
@@ -488,7 +492,7 @@ async def update_order_status(db: AsyncSession, order_id: str, new_status: str, 
         await create_notification(db, str(order.user_id), msg, order.id)
         
     await db.commit()
-    redis_client.delete(f"outlet_history:{outlet_id}")
+    await redis_client.delete(f"outlet_history:{str(order.outlet_id)}")
     results = await batch_format_orders(db, [order])
     return results[0]
 
@@ -676,7 +680,7 @@ async def get_outlet_stats(db: AsyncSession, outlet_id: str) -> dict:
 async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
     from sqlalchemy import case, cast, Date as SADate, text
     cache_key = f"outlet_history:{outlet_id}"
-    cached = redis_client.get(cache_key)
+    cached = await redis_client.get(cache_key)
     if cached:
         return json.loads(cached)
     today_ist = datetime.now(IST).date()
@@ -733,13 +737,13 @@ async def get_outlet_history(db: AsyncSession, outlet_id: str) -> list:
             "completed_count": d["completed"],
             "revenue": round(d["revenue"], 2),
         })
-    redis_client.setex(cache_key, 60, json.dumps(result, default=str))
+    await redis_client.setex(cache_key, 60, json.dumps(result, default=str))
     return result
 
 async def get_outlet_feedback(db: AsyncSession, outlet_id: str) -> list:
     from app.users.models import Student
     cache_key = f"outlet_feedback:{outlet_id}"
-    cached = redis_client.get(cache_key)
+    cached = await redis_client.get(cache_key)
     if cached:
         return json.loads(cached)
     stmt = (
@@ -765,5 +769,5 @@ async def get_outlet_feedback(db: AsyncSession, outlet_id: str) -> list:
             "student_register_number": student.register_no if student else "—",
             "created_at": rating.created_at,
         })
-    redis_client.setex(cache_key, 120, json.dumps(feedbacks, default=str))
+    await redis_client.setex(cache_key, 120, json.dumps(feedbacks, default=str))
     return feedbacks

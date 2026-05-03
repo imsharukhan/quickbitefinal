@@ -28,7 +28,7 @@ async def get_menu(
                     if owns:
                         final_include = True
             except Exception:
-                pass
+                await db.rollback()  # heal the session before continuing
     return await service.get_menu_by_outlet(db, outlet_id, final_include)
 
 @router.post("/{outlet_id}", response_model=schemas.MenuItemResponse)
