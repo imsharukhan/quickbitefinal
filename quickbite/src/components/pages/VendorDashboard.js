@@ -277,27 +277,27 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
     };
  
     const handleToggleOutlet = async () => {
-        // Optimistic — flip instantly
         const newIsOpen = !selectedOutlet.is_open;
         setSelectedOutlet(prev => ({ ...prev, is_open: newIsOpen }));
         showToast(`Outlet is now ${newIsOpen ? 'OPEN 🟢' : 'CLOSED 🔴'}`);
         try {
             await outletManagementService.toggleOutletOpen(selectedOutlet.id);
+            loadOutlets(); // confirm from server — vendor sees same state as students
         } catch (e) {
-            // Revert on failure
             setSelectedOutlet(prev => ({ ...prev, is_open: !newIsOpen }));
             showToast('Failed to update status', 'error');
         }
     };
  
     const handleSaveOutlet = async () => {
-        // Optimistic — update locally first
         setSelectedOutlet(prev => ({ ...prev, ...outletForm }));
         showToast('Hours saved ✅');
         try {
             await outletManagementService.updateOutlet(selectedOutlet.id, outletForm);
+            loadOutlets(); // re-sync so vendor sees exactly what students see
         } catch (e) {
             showToast('Failed to save hours', 'error');
+            loadOutlets(); // revert optimistic update on failure
         }
     };
  

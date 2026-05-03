@@ -2,10 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, model_validator, ConfigDict
-import pytz
-
-IST = pytz.timezone('Asia/Kolkata')
+from pydantic import BaseModel, ConfigDict
 
 class OutletCreate(BaseModel):
     vendor_id: UUID
@@ -50,27 +47,7 @@ class OutletResponse(BaseModel):
     image_url: Optional[str]
     created_at: datetime
     closed_dates: Optional[list] = []
-
-    @model_validator(mode='after')
-    def sync_ist_time(self):
-        try:
-            now_ist = datetime.now(IST)
-            today_str = now_ist.strftime("%Y-%m-%d")
-
-            # Check holiday/closed dates first
-            if self.closed_dates and today_str in self.closed_dates:
-                self.is_open = False
-                return self
-
-            # Check operating hours
-            if self.is_open and self.opening_time and self.closing_time:
-                now_str = now_ist.strftime("%H:%M")
-                if not (self.opening_time <= now_str <= self.closing_time):
-                    self.is_open = False
-        except Exception:
-            pass
-        return self
-
+    
 class TimeSlotResponse(BaseModel):
     time: str
     available_slots: int
