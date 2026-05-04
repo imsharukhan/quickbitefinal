@@ -239,17 +239,62 @@ app.include_router(outlets_router,       prefix="/api/outlets",       tags=["out
 app.include_router(menu_router,          prefix="/api/menu",          tags=["menu"])
 app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
 
-# WebSocket routes must be on app directly — Railway proxy won't match them inside APIRouter
-from app.orders.router import student_websocket, vendor_websocket
-from fastapi import WebSocket, Query as WSQuery
+app.include_router(orders_router,        prefix="/api/orders",        tags=["orders"])
+
+# WebSocket routes registered directly on app with full inline logic
+# Wrapper approach fails on Railway — FastAPI Query() inspection differs for WS routes
+from fastapi import WebSocket
+from app.orders.websocket import manager as _ws_manager
+from app.auth.utils import decode_token as _ws_decode
+import asyncio as _asyncio
+import time as _time
+from starlette.websockets import WebSocketDisconnect as _WSDisconnect
 
 @app.websocket("/api/orders/ws/student/{user_id}")
-async def ws_student(websocket: WebSocket, user_id: str, token: str = WSQuery(...)):
-    await student_websocket(websocket, user_id, token)
+async def ws_student_endpoint(websocket: WebSocket, user_id: str, token: str):
+    try:
+        payload = _ws_decode(token)
+        if payload.get("role") not in ["student", "staff"] or payload.get("sub") != user_id:
+            await websocket.accept()
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.accept()
+        await websocket.close(code=4001)
+        return
+    await _ws_manager.connect_student(websocket, user_id)
+    try:
+        while True:
+            await _asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+            if payload.get("exp", 0) - _time.time() < 300:
+                await websocket.send_json({"type": "TOKEN_EXPIRING"})
+    except _WSDisconnect:
+        _ws_manager.disconnect_student(user_id)
+    except Exception:
+        _ws_manager.disconnect_student(user_id)
 
 @app.websocket("/api/orders/ws/vendor/{vendor_id}")
-async def ws_vendor(websocket: WebSocket, vendor_id: str, token: str = WSQuery(...)):
-    await vendor_websocket(websocket, vendor_id, token)
+async def ws_vendor_endpoint(websocket: WebSocket, vendor_id: str, token: str):
+    try:
+        payload = _ws_decode(token)
+        if payload.get("role") != "vendor" or payload.get("sub") != vendor_id:
+            await websocket.accept()
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.accept()
+        await websocket.close(code=4001)
+        return
+    await _ws_manager.connect_vendor(websocket, vendor_id)
+    try:
+        while True:
+            await _asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+    except _WSDisconnect:
+        _ws_manager.disconnect_vendor(websocket, vendor_id)
+    except Exception:
+        _ws_manager.disconnect_vendor(websocket, vendor_id)
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(admin_router,         prefix="/api/admin",         tags=["admin"])
 app.include_router(payments_router, prefix="/api/payments", tags=["payments"])
