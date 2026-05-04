@@ -43,6 +43,8 @@ export default function Page() {
   // Internal nav stack — used to resolve back button
   const navStack = useRef(['home']);
   const isPopRef = useRef(false); // true when navigation triggered by popstate
+  const backPressedOnce = useRef(false);
+  const backPressTimer = useRef(null);
 
   // ── Bootstrap ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -62,31 +64,36 @@ export default function Page() {
     return () => clearTimeout(timeout);
   }, [isLoading]);
 
-  // ── Back button listener ───────────────────────────────────────────
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handlePop = (e) => {
+  const handlePop = (e) => {
       const stack = navStack.current;
 
-      // Already at root — let browser handle it naturally
+      // At root — double-back-to-exit pattern (works on Android PWA)
       if (stack.length <= 1) {
-        navStack.current = ['home'];
+        if (backPressedOnce.current) {
+          // Second press within 2s — go back past our seeded entry to exit/minimize
+          clearTimeout(backPressTimer.current);
+          backPressedOnce.current = false;
+          window.history.back();
+          return;
+        }
+        // First press — show toast, wait for second
+        backPressedOnce.current = true;
+        showToast('Press back again to exit', 'info');
+        // Re-push so popstate fires again on second press
+        window.history.pushState({ page: 'home' }, '');
+        backPressTimer.current = setTimeout(() => {
+          backPressedOnce.current = false;
+        }, 2000);
         return;
       }
 
-      // Pop current page off the stack
+      // Normal back — pop the stack
       stack.pop();
       const prevPage = stack[stack.length - 1];
-
       isPopRef.current = true;
       setCurrentPage(prevPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
-
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
-  }, []);
 
   // ── Toast helper ──────────────────────────────────────────────────
   const showToast = (message, type = 'success') => {
@@ -120,12 +127,10 @@ export default function Page() {
     const depth = navStack.current.length - 1;
     navStack.current = ['home'];
     setCurrentPage('home');
+    // On desktop: close tab. On mobile: go home first, then double-back handles exit.
     if (depth > 0) {
-      // Go back past all pushed entries so browser history is clean
       window.history.go(-depth);
-      setTimeout(() => {
-        window.close();
-      }, 150);
+      setTimeout(() => window.close(), 150);
     } else {
       window.close();
     }

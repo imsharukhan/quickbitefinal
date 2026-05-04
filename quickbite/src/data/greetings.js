@@ -1,6 +1,4 @@
-// 7 unique daily greetings — changes every day of the week
-// Each has a main salutation + time-aware sub messages
-// Students will actually smile reading these
+// Note is : 7 unique daily greetings — changes every day of the week
 
 const DAILY = [
   {
@@ -86,7 +84,7 @@ export function getGreeting(name) {
   const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000;
   const ist = new Date(now.getTime() + istOffset);
-  const day  = ist.getUTCDay();   // 0 Sun … 6 Sat
+  const day  = ist.getUTCDay();   
   const hour = ist.getUTCHours();
 
   const firstName = name ? name.trim().split(' ')[0].toLowerCase() : null;
