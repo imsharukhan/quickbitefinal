@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import * as outletManagementService from '@/services/outletManagementService';
+import { invalidateOutletsCache } from '@/services/outletService';
 import * as orderSvc from '@/services/orderService';
 import * as menuMgmt from '@/services/menuManagementService';
 import { invalidateMenuCache } from '@/services/menuService';
@@ -282,7 +283,8 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         showToast(`Outlet is now ${newIsOpen ? 'OPEN 🟢' : 'CLOSED 🔴'}`);
         try {
             await outletManagementService.toggleOutletOpen(selectedOutlet.id);
-            loadOutlets(); // confirm from server — vendor sees same state as students
+            invalidateOutletsCache(); // students get fresh is_open on next poll
+            loadOutlets();
         } catch (e) {
             setSelectedOutlet(prev => ({ ...prev, is_open: !newIsOpen }));
             showToast('Failed to update status', 'error');
@@ -294,10 +296,11 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         showToast('Hours saved ✅');
         try {
             await outletManagementService.updateOutlet(selectedOutlet.id, outletForm);
-            loadOutlets(); // re-sync so vendor sees exactly what students see
+            invalidateOutletsCache(); // students see new hours immediately on next poll
+            loadOutlets();
         } catch (e) {
             showToast('Failed to save hours', 'error');
-            loadOutlets(); // revert optimistic update on failure
+            loadOutlets();
         }
     };
  

@@ -49,7 +49,8 @@ export default function HomePage({ navigate }) {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const data = await outletService.getAllOutlets();
+      // silent=true means background refresh — bypass cache for fresh is_open state
+      const data = await outletService.getAllOutlets(silent);
       setOutlets(data || []);
     } catch (err) {
       if (!silent) setError('Failed to load outlets. Please try again.');

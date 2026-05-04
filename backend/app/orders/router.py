@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+# Note: student_websocket and vendor_websocket are registered directly on app in main.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from app.database import get_db
@@ -212,7 +213,6 @@ async def get_outlet_feedback(
         raise HTTPException(status_code=403, detail="Not authorized")
     return await service.get_outlet_feedback(db, outlet_id)
 
-@router.websocket("/ws/student/{user_id}")
 async def student_websocket(websocket: WebSocket, user_id: str, token: str = Query(...)):
     try:
         payload = decode_token(token)
@@ -230,7 +230,6 @@ async def student_websocket(websocket: WebSocket, user_id: str, token: str = Que
         while True:
             await asyncio.sleep(30)
             await websocket.send_json({"type": "ping"})
-            
             exp = payload.get("exp", 0)
             if exp - time.time() < 300:
                 await websocket.send_json({"type": "TOKEN_EXPIRING"})
@@ -239,7 +238,6 @@ async def student_websocket(websocket: WebSocket, user_id: str, token: str = Que
     except Exception:
         manager.disconnect_student(user_id)
 
-@router.websocket("/ws/vendor/{vendor_id}")
 async def vendor_websocket(websocket: WebSocket, vendor_id: str, token: str = Query(...)):
     try:
         payload = decode_token(token)

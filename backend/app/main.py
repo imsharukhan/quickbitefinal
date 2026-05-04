@@ -238,6 +238,11 @@ app.include_router(vendors_router,       prefix="/api/vendors",       tags=["ven
 app.include_router(outlets_router,       prefix="/api/outlets",       tags=["outlets"])
 app.include_router(menu_router,          prefix="/api/menu",          tags=["menu"])
 app.include_router(orders_router,        prefix="/api/orders",        tags=["orders"])
+
+# WebSocket routes registered directly on app — bypasses APIRouter prefix matching issues
+from app.orders.router import student_websocket, vendor_websocket
+app.add_api_websocket_route("/api/orders/ws/student/{user_id}", student_websocket)
+app.add_api_websocket_route("/api/orders/ws/vendor/{vendor_id}", vendor_websocket)
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(admin_router,         prefix="/api/admin",         tags=["admin"])
 app.include_router(payments_router, prefix="/api/payments", tags=["payments"])

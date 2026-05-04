@@ -4,9 +4,17 @@ import api from './api';
 const slotsCache = {};
 const outletsCache = { list: null, listTime: 0 };
 
-export const getAllOutlets = async () => {
+export const invalidateOutletsCache = () => {
+  outletsCache.list = null;
+  outletsCache.listTime = 0;
+};
+
+export const getAllOutlets = async (bypassCache = false) => {
   const now = Date.now();
-  if (outletsCache.list && now - outletsCache.listTime < 10000) return outletsCache.list;
+  // 10s cache for normal loads, bypassed for post-action refreshes
+  if (!bypassCache && outletsCache.list && now - outletsCache.listTime < 10000) {
+    return outletsCache.list;
+  }
   const data = await api.get('/api/outlets').then(res => res.data);
   outletsCache.list = data;
   outletsCache.listTime = now;
