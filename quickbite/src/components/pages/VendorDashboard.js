@@ -188,24 +188,45 @@ const handleOrderAction = async (orderId, newStatus, currentStatus) => {
         if (actionLoading) return;
         setActionLoading(orderId);
 
+        // Optimistic update — UI changes instantly, no waiting for API
+        const optimisticUpdate = {
+            id: orderId,
+            status: newStatus,
+            // Keep payment status consistent
+            payment_status: newStatus === 'Preparing' ? 'COMPLETED' : undefined,
+        };
+        setOrders(prev => prev.map(o => {
+            if (o.id !== orderId) return o;
+            const currentRank = STATUS_RANK[o.status] ?? -1;
+            const newRank = STATUS_RANK[newStatus] ?? -1;
+            if (newRank < currentRank) return o; // never go backward
+            return {
+                ...o,
+                status: newStatus,
+                ...(newStatus === 'Preparing' ? { payment_status: 'COMPLETED', payment_confirmed_by_vendor: true } : {}),
+            };
+        }));
+
         try {
             let updatedOrder;
-            // Placed → Preparing MUST go through confirm-payment endpoint, not /status
             if (currentStatus === 'Placed' && newStatus === 'Preparing') {
                 updatedOrder = await orderSvc.confirmPayment(orderId);
             } else {
                 updatedOrder = await orderSvc.updateOrderStatus(orderId, newStatus);
             }
+            // Reconcile with server truth — handles token_number assignment etc.
             setOrders(prev => mergeOrderForward(prev, updatedOrder));
             showToast('Order updated ✅');
-            // Background stats refresh — non-blocking, never blocks UI
             orderSvc.getOutletStats(selectedOutlet.id)
                 .then(sData => { if (sData) setStats(sData); })
                 .catch(() => {});
         } catch (e) {
+            // Revert optimistic update on failure
+            setOrders(prev => prev.map(o => {
+                if (o.id !== orderId) return o;
+                return { ...o, status: currentStatus };
+            }));
             showToast('Failed to update order', 'error');
-            // Don't call loadOutletData() on failure — it triggers N+1 and can timeout
-            // Just silently refresh orders in background after a small delay
             setTimeout(() => loadOutletData(true), 1500);
         } finally {
             setActionLoading(null);

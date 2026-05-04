@@ -237,13 +237,11 @@ app.include_router(users_router,         prefix="/api/users",         tags=["use
 app.include_router(vendors_router,       prefix="/api/vendors",       tags=["vendors"])
 app.include_router(outlets_router,       prefix="/api/outlets",       tags=["outlets"])
 app.include_router(menu_router,          prefix="/api/menu",          tags=["menu"])
-app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
-
 app.include_router(orders_router,        prefix="/api/orders",        tags=["orders"])
 
 # WebSocket routes registered directly on app with full inline logic
 # Wrapper approach fails on Railway — FastAPI Query() inspection differs for WS routes
-from fastapi import WebSocket
+from fastapi import WebSocket, Query
 from app.orders.websocket import manager as _ws_manager
 from app.auth.utils import decode_token as _ws_decode
 import asyncio as _asyncio
@@ -251,7 +249,7 @@ import time as _time
 from starlette.websockets import WebSocketDisconnect as _WSDisconnect
 
 @app.websocket("/api/orders/ws/student/{user_id}")
-async def ws_student_endpoint(websocket: WebSocket, user_id: str, token: str):
+async def ws_student_endpoint(websocket: WebSocket, user_id: str, token: str = Query(...)):
     try:
         payload = _ws_decode(token)
         if payload.get("role") not in ["student", "staff"] or payload.get("sub") != user_id:
@@ -275,7 +273,7 @@ async def ws_student_endpoint(websocket: WebSocket, user_id: str, token: str):
         _ws_manager.disconnect_student(user_id)
 
 @app.websocket("/api/orders/ws/vendor/{vendor_id}")
-async def ws_vendor_endpoint(websocket: WebSocket, vendor_id: str, token: str):
+async def ws_vendor_endpoint(websocket: WebSocket, vendor_id: str, token: str = Query(...)):
     try:
         payload = _ws_decode(token)
         if payload.get("role") != "vendor" or payload.get("sub") != vendor_id:

@@ -56,11 +56,17 @@ export function useWebSocket(role, id) {
                 } catch (e) {}
             };
             
-            ws.onclose = () => {
+            ws.onclose = (event) => {
                 setIsConnected(false);
+                // 4001 = auth failure — stop immediately, don't retry
+                if (event.code === 4001) return;
                 attemptRef.current += 1;
+                // Cap at 5 retries (max ~10s delay), then reset to keep trying every 30s
+                const retryCount = Math.min(attemptRef.current, 5);
                 const jitter = Math.random() * 1000 - 500;
-                const delay = (attemptRef.current * 2000) + jitter;
+                const delay = retryCount < 5
+                    ? (retryCount * 2000) + jitter
+                    : 30000 + jitter; // settled into 30s heartbeat — won't hammer server
                 setTimeout(connect, Math.max(0, delay));
             };
             
