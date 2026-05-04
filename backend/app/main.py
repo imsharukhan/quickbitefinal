@@ -237,12 +237,19 @@ app.include_router(users_router,         prefix="/api/users",         tags=["use
 app.include_router(vendors_router,       prefix="/api/vendors",       tags=["vendors"])
 app.include_router(outlets_router,       prefix="/api/outlets",       tags=["outlets"])
 app.include_router(menu_router,          prefix="/api/menu",          tags=["menu"])
-app.include_router(orders_router,        prefix="/api/orders",        tags=["orders"])
+app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
 
-# WebSocket routes registered directly on app — bypasses APIRouter prefix matching issues
+# WebSocket routes must be on app directly — Railway proxy won't match them inside APIRouter
 from app.orders.router import student_websocket, vendor_websocket
-app.add_api_websocket_route("/api/orders/ws/student/{user_id}", student_websocket)
-app.add_api_websocket_route("/api/orders/ws/vendor/{vendor_id}", vendor_websocket)
+from fastapi import WebSocket, Query as WSQuery
+
+@app.websocket("/api/orders/ws/student/{user_id}")
+async def ws_student(websocket: WebSocket, user_id: str, token: str = WSQuery(...)):
+    await student_websocket(websocket, user_id, token)
+
+@app.websocket("/api/orders/ws/vendor/{vendor_id}")
+async def ws_vendor(websocket: WebSocket, vendor_id: str, token: str = WSQuery(...)):
+    await vendor_websocket(websocket, vendor_id, token)
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(admin_router,         prefix="/api/admin",         tags=["admin"])
 app.include_router(payments_router, prefix="/api/payments", tags=["payments"])
