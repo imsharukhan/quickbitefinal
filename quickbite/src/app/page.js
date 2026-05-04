@@ -42,7 +42,7 @@ export default function Page() {
 
   // Internal nav stack — used to resolve back button
   const navStack = useRef(['home']);
-  const isPopRef = useRef(false); // true when navigation triggered by popstate
+  const isPopRef = useRef(false);
   const backPressedOnce = useRef(false);
   const backPressTimer = useRef(null);
 
@@ -52,9 +52,11 @@ export default function Page() {
       setCurrentPage('admin');
     }
 
-    // Seed one history entry so the very first back press is catchable
+    // Seed exactly 2 entries: [root, guard]
+    // Internal nav never touches browser history — only React state
     if (typeof window !== 'undefined') {
-      window.history.replaceState({ page: 'home' }, '');
+      window.history.replaceState({ appRoot: true }, '');
+      window.history.pushState({ appGuard: true }, '');
     }
 
     const timeout = setTimeout(() => {
@@ -64,36 +66,38 @@ export default function Page() {
     return () => clearTimeout(timeout);
   }, [isLoading]);
 
-  const handlePop = (e) => {
+  const handlePop = () => {
       const stack = navStack.current;
 
-      // At root — double-back-to-exit pattern (works on Android PWA)
       if (stack.length <= 1) {
+        // Already at home — double-swipe-to-exit
         if (backPressedOnce.current) {
-          // Second press within 2s — go back past our seeded entry to exit/minimize
+          // Second swipe within 2s — don't re-push guard
+          // Browser stays at [root] → PWA minimizes/exits naturally on Android
           clearTimeout(backPressTimer.current);
           backPressedOnce.current = false;
-          window.history.back();
-          return;
+          return; // do NOT re-push → exit happens
         }
-        // First press — show toast, wait for second
+        // First swipe — show toast, re-push guard so next swipe fires popstate again
         backPressedOnce.current = true;
-        showToast('Press back again to exit', 'info');
-        // Re-push so popstate fires again on second press
-        window.history.pushState({ page: 'home' }, '');
+        showToast('Swipe back again to exit', 'info');
+        window.history.pushState({ appGuard: true }, '');
         backPressTimer.current = setTimeout(() => {
           backPressedOnce.current = false;
         }, 2000);
         return;
       }
 
-      // Normal back — pop the stack
+      // Non-home page — navigate back in React state
       stack.pop();
       const prevPage = stack[stack.length - 1];
       isPopRef.current = true;
       setCurrentPage(prevPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Always re-push guard to keep browser history at exactly [root, guard]
+      window.history.pushState({ appGuard: true }, '');
     };
+        
 
   // ── Toast helper ──────────────────────────────────────────────────
   const showToast = (message, type = 'success') => {
@@ -111,10 +115,10 @@ export default function Page() {
   const navigate = (page, data) => {
     if (page === 'menu' && data) setSelectedOutlet(data);
 
-    // Don't push to history if this was triggered by popstate
+    // Internal navigation = React state only, NEVER touch browser history
+    // Browser history stays fixed at [root, guard] always
     if (!isPopRef.current) {
       navStack.current.push(page);
-      window.history.pushState({ page }, '');
     }
     isPopRef.current = false;
 
