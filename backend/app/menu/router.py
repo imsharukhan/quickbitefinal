@@ -6,6 +6,19 @@ from app.auth.dependencies import get_current_vendor
 
 router = APIRouter()
 
+@router.get("/vendor/{outlet_id}", response_model=list[schemas.MenuItemResponse])
+async def get_vendor_menu(
+    outlet_id: str,
+    current_vendor = Depends(get_current_vendor),
+    db: AsyncSession = Depends(get_db)
+):
+    """Vendor-only — always returns ALL items including sold-out. 
+    No silent fallback possible — auth is guaranteed by Depends."""
+    owns = await service.validate_vendor_owns_outlet(db, str(current_vendor.id), outlet_id)
+    if not owns:
+        raise HTTPException(status_code=403, detail="Not authorized for this outlet")
+    return await service.get_menu_by_outlet(db, outlet_id, include_unavailable=True)
+
 @router.get("/{outlet_id}", response_model=list[schemas.MenuItemResponse])
 async def get_menu(
     outlet_id: str,
