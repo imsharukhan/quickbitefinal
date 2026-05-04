@@ -27,12 +27,6 @@ export default function BudgetPage({ navigate }) {
     const todaySpent = todayOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
 
     const allItems = completedOrders.flatMap(o => o.items);
-    const vegSpent = allItems
-        .filter(i => i.is_veg)
-        .reduce((sum, i) => sum + i.price * i.quantity, 0);
-    const nonVegSpent = allItems
-        .filter(i => !i.is_veg)
-        .reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     const itemCount = {};
     allItems.forEach(i => {
@@ -51,10 +45,6 @@ export default function BudgetPage({ navigate }) {
 
     const avgOrder = completedOrders.length > 0
         ? Math.round(totalSpent / completedOrders.length)
-        : 0;
-
-    const vegPercent = totalSpent > 0
-        ? Math.round((vegSpent / totalSpent) * 100)
         : 0;
 
     if (completedOrders.length === 0) {
@@ -86,68 +76,71 @@ export default function BudgetPage({ navigate }) {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px', marginTop: '12px' }}>
-                <div className="stat-card">
-                    <div className="stat-value">₹{todaySpent}</div>
-                    <div className="stat-label">Today</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-value">₹{weekSpent}</div>
-                    <div className="stat-label">This Week</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-value">₹{totalSpent}</div>
-                    <div className="stat-label">All Time</div>
-                </div>
-            </div>
-
-            <div className="profile-card">
-                <h3>Insights</h3>
-                <div className="profile-field">
-                    <span className="field-label">Total Orders</span>
-                    <span className="field-value">{completedOrders.length}</span>
-                </div>
-                <div className="profile-field">
-                    <span className="field-label">Average Order</span>
-                    <span className="field-value">₹{avgOrder}</span>
-                </div>
-                <div className="profile-field">
-                    <span className="field-label">Favourite Item</span>
-                    <span className="field-value">{mostOrdered ? mostOrdered[0] : 'No orders yet'}</span>
-                </div>
-            </div>
-
-            <div className="profile-card">
-                <h3>Veg vs Non-Veg</h3>
-                <div style={{
-                    background: '#f0f0f0',
-                    borderRadius: '999px',
-                    height: '12px',
-                    overflow: 'hidden',
-                    margin: '12px 0'
-                }}>
-                    <div style={{
-                        width: vegPercent + '%',
-                        background: '#2ECC99',
-                        height: '100%',
-                        borderRadius: '999px',
-                        transition: 'width 0.5s ease'
-                    }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                    <span>🥬 Veg: ₹{vegSpent} ({vegPercent}%)</span>
-                    <span>🍗 Non-Veg: ₹{nonVegSpent} ({100 - vegPercent}%)</span>
-                </div>
-            </div>
-
-            <div className="profile-card">
-                <h3>Spent Per Canteen</h3>
-                {Object.entries(canteenSpend).map(([canteen, amount]) => (
-                    <div className="profile-field" key={canteen}>
-                        <span className="field-label">{canteen}</span>
-                        <span className="field-value">₹{amount}</span>
+            {/* Stat Cards - 2 top + 1 featured */}
+            <div style={{ marginBottom: '12px', marginTop: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div className="stat-card" style={{ padding: '14px 10px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Today</div>
+                        <div className="stat-value" style={{ fontSize: '1.35rem', fontWeight: '700' }}>₹{todaySpent}</div>
                     </div>
-                ))}
+                    <div className="stat-card" style={{ padding: '14px 10px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Week</div>
+                        <div className="stat-value" style={{ fontSize: '1.35rem', fontWeight: '700' }}>₹{weekSpent}</div>
+                    </div>
+                </div>
+                <div style={{
+                    background: 'linear-gradient(135deg, #FF8C00 0%, #FFA940 100%)',
+                    borderRadius: '12px',
+                    padding: '18px 20px',
+                    textAlign: 'center',
+                    boxShadow: '0 4px 15px rgba(255,140,0,0.25)'
+                }}>
+                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>All Time Spent</div>
+                    <div style={{ fontSize: '2rem', fontWeight: '800', color: '#fff' }}>₹{totalSpent}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.75)', marginTop: '4px' }}>{completedOrders.length} order{completedOrders.length !== 1 ? 's' : ''} placed</div>
+                </div>
+            </div>
+
+            <div className="profile-card">
+                <h3 style={{ marginBottom: '12px' }}>📊 Insights</h3>
+                <div className="profile-field" style={{ padding: '10px 0' }}>
+                    <span className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>🧾 Total Orders</span>
+                    <span className="field-value" style={{ fontWeight: '700' }}>{completedOrders.length}</span>
+                </div>
+                <div className="profile-field" style={{ padding: '10px 0' }}>
+                    <span className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>💰 Average Order</span>
+                    <span className="field-value" style={{ fontWeight: '700' }}>₹{avgOrder}</span>
+                </div>
+                <div className="profile-field" style={{ padding: '10px 0', borderBottom: 'none' }}>
+                    <span className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>⭐ Favourite Item</span>
+                    <span className="field-value" style={{ fontWeight: '700', maxWidth: '55%', textAlign: 'right' }}>{mostOrdered ? mostOrdered[0] : 'No orders yet'}</span>
+                </div>
+            </div>
+
+            <div className="profile-card" style={{ marginBottom: '24px' }}>
+                <h3 style={{ marginBottom: '14px' }}>🏪 Spent Per Canteen</h3>
+                {(() => {
+                    const maxSpend = Math.max(...Object.values(canteenSpend));
+                    return Object.entries(canteenSpend)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([canteen, amount]) => (
+                            <div key={canteen} style={{ marginBottom: '14px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                    <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{canteen}</span>
+                                    <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#FF8C00' }}>₹{amount}</span>
+                                </div>
+                                <div style={{ background: '#f0f0f0', borderRadius: '999px', height: '6px', overflow: 'hidden' }}>
+                                    <div style={{
+                                        width: `${Math.round((amount / maxSpend) * 100)}%`,
+                                        background: 'linear-gradient(90deg, #FF8C00, #FFA940)',
+                                        height: '100%',
+                                        borderRadius: '999px',
+                                        transition: 'width 0.5s ease'
+                                    }} />
+                                </div>
+                            </div>
+                        ));
+                })()}
             </div>
         </div>
     );
