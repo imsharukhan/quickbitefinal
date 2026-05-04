@@ -69,9 +69,9 @@ export default function Page() {
     const handlePop = (e) => {
       const stack = navStack.current;
 
-      // If we're already at root, re-push so next back still works
+      // Already at root — let browser handle it naturally
       if (stack.length <= 1) {
-        window.history.pushState({ page: 'home' }, '');
+        navStack.current = ['home'];
         return;
       }
 
@@ -115,6 +115,22 @@ export default function Page() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // ── Exit App ─────────────────────────────────────────────────────
+  const exitApp = () => {
+    const depth = navStack.current.length - 1;
+    navStack.current = ['home'];
+    setCurrentPage('home');
+    if (depth > 0) {
+      // Go back past all pushed entries so browser history is clean
+      window.history.go(-depth);
+      setTimeout(() => {
+        window.close();
+      }, 150);
+    } else {
+      window.close();
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────
   const renderPage = () => {
     switch (currentPage) {
@@ -156,7 +172,7 @@ export default function Page() {
 
   return (
     <>
-      <Navbar currentPage={currentPage} navigate={navigate} />
+      <Navbar currentPage={currentPage} navigate={navigate} exitApp={exitApp} />
       <main className="main-content">
         <div className="page-enter">
           {renderPage()}

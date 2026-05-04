@@ -41,9 +41,25 @@ export default function HomePage({ navigate }) {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchFocused, setSearchFocused] = useState(false);
+  const [revealed, setRevealed] = useState(false);
 
   const filters = ['All', 'Open Now', 'Closed'];
   const greet = getGreeting(user?.name);
+
+  useEffect(() => {
+    const t = setTimeout(() => setRevealed(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  const anim = (delay, type = 'fadeSlideUp', duration = '0.72s') =>
+    revealed
+      ? { animation: `${type} ${duration} cubic-bezier(0.22,1,0.36,1) ${delay}ms both` }
+      : { opacity: 0 };
+
+  const salutationWords = greet.salutation.replace(/,.*/, '').trim().split(' ');
+  const nameWord = greet.salutation.includes(',')
+    ? greet.salutation.split(/,(.+)/)[1].trim()
+    : '';
 
   const fetchOutlets = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -91,7 +107,8 @@ export default function HomePage({ navigate }) {
     <div className="page-container animate-fade-in" style={{ paddingTop: 'var(--page-top-pad, 80px)' }}>
 
       {/* ── Greeting Hero ── */}
-      <div style={{ padding: '28px 0 24px' }}>
+      <div style={{ padding: 'clamp(10px, 3vw, 28px) 0 24px' }}>
+        {/* Date */}
         <p style={{
           fontSize: '0.78rem',
           fontWeight: 600,
@@ -99,37 +116,62 @@ export default function HomePage({ navigate }) {
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
           marginBottom: '10px',
+          ...anim(0),
         }}>
           {new Date().toLocaleDateString('en-IN', {
             timeZone: 'Asia/Kolkata',
             weekday: 'long', month: 'long', day: 'numeric',
           })}
         </p>
+
+        {/* Greeting h1 — word-by-word curtain reveal */}
         <h1 style={{
           fontSize: 'clamp(1.9rem, 5vw, 2.6rem)',
           fontWeight: 800,
-          lineHeight: 1.15,
+          lineHeight: 1.25,
           color: 'var(--text)',
           marginBottom: '10px',
           letterSpacing: '-0.02em',
+          display: 'flex',
+          flexWrap: 'wrap',
+          columnGap: '0.28em',
+          rowGap: '0',
         }}>
-          {greet.salutation.replace(/,.*/, '')}{' '}
-          <span style={{ color: 'var(--primary)' }}>
-            {greet.salutation.includes(',') ? greet.salutation.split(/,(.+)/)[1] : ''}
-          </span>
+          {salutationWords.map((word, i) => (
+            <span key={i} style={{ overflow: 'hidden', display: 'inline-block', lineHeight: 1.25 }}>
+              <span style={anim(80 + i * 90, 'wordUp', '0.65s')}>
+                {word}
+              </span>
+            </span>
+          ))}
+          {nameWord && (
+            <span style={{ overflow: 'hidden', display: 'inline-block', lineHeight: 1.25 }}>
+              <span style={{
+                color: 'var(--primary)',
+                display: 'inline-block',
+                ...anim(80 + salutationWords.length * 90, 'wordUp', '0.65s'),
+              }}>
+                {nameWord}
+              </span>
+            </span>
+          )}
         </h1>
+
+        {/* Sub text — blur dissolve */}
         <p style={{
           color: 'var(--text-secondary)',
           fontSize: '1rem',
           marginBottom: '28px',
           maxWidth: '380px',
           lineHeight: 1.55,
+          ...anim(320, 'blurIn', '0.8s'),
         }}>
           {greet.sub}
         </p>
 
         {/* Search Bar — pill style */}
-        <div style={{ position: 'relative', maxWidth: '480px' }}>
+        <div style={{ position: 'relative', maxWidth: '480px', ...anim(440, 'scaleUp', '0.65s') }}>
+    
           <span style={{
             position: 'absolute', left: '18px', top: '50%',
             transform: 'translateY(-50%)',
@@ -182,7 +224,7 @@ export default function HomePage({ navigate }) {
 
       {/* ── Filter Pills ── */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
-        {filters.map(f => {
+        {filters.map((f, fi) => {
           const isActive = activeFilter === f;
           return (
             <button
@@ -192,16 +234,17 @@ export default function HomePage({ navigate }) {
                 display: 'flex', alignItems: 'center', gap: '7px',
                 padding: '8px 18px',
                 borderRadius: '999px',
-                border: isActive ? 'none' : '1.5px solid var(--border)',
-                background: isActive ? 'var(--primary)' : 'white',
-                color: isActive ? 'white' : 'var(--text-secondary)',
+                border: (activeFilter === f) ? 'none' : '1.5px solid var(--border)',
+                background: (activeFilter === f) ? 'var(--primary)' : 'white',
+                color: (activeFilter === f) ? 'white' : 'var(--text-secondary)',
                 fontSize: '0.82rem',
                 fontWeight: 600,
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: isActive ? '0 4px 14px rgba(252,128,25,0.28)' : '0 1px 4px rgba(0,0,0,0.04)',
+                boxShadow: (activeFilter === f) ? '0 4px 14px rgba(252,128,25,0.28)' : '0 1px 4px rgba(0,0,0,0.04)',
                 flexShrink: 0,
+                ...anim(540 + fi * 60, 'fadeSlideUp', '0.55s'),
               }}
             >
               {f === 'Open Now' && (
@@ -292,7 +335,23 @@ export default function HomePage({ navigate }) {
       <div style={{ paddingBottom: '40px' }} />
       <style>{`
         :root { --page-top-pad: 80px; }
-        @media (max-width: 768px) { :root { --page-top-pad: 68px; } }
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(22px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes wordUp {
+          from { opacity: 0; transform: translateY(105%); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes blurIn {
+          from { opacity: 0; filter: blur(10px); transform: translateY(10px); }
+          to   { opacity: 1; filter: blur(0px); transform: translateY(0); }
+        }
+        @keyframes scaleUp {
+          from { opacity: 0; transform: translateY(14px) scaleX(0.97); }
+          to   { opacity: 1; transform: translateY(0) scaleX(1); }
+        }
+        @media (max-width: 768px) { :root { --page-top-pad: 16px; } }
         .custom-outlet-grid {
           display: grid;
           grid-template-columns: 1fr;
