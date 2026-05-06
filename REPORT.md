@@ -59,40 +59,11 @@ Vendor workflow:
 
 ## Frontend / Backend Interaction
 
-The frontend uses a shared Axios instance in `quickbite/src/services/api.js`. The API base URL comes from `NEXT_PUBLIC_API_URL`, and every request adds the bearer token from local storage when present.
-
-The Axios response interceptor handles `401` responses by calling `/api/auth/refresh`, replaying queued failed requests after refresh, and dispatching a local logout event if refresh fails.
-
-Frontend service modules map directly to backend route groups:
-
-- `authService.js` to `/api/auth` and `/api/users/me`
-- `outletService.js` and `outletManagementService.js` to `/api/outlets`
-- `menuService.js` and `menuManagementService.js` to `/api/menu`
-- `orderService.js` to `/api/orders`
-- `paymentService.js` to `/api/payments`
-- `notificationService.js` to `/api/notifications`
-
-The UI is implemented as a client-side app under `quickbite/src/app/page.js`, switching between page components with React state rather than route files.
+The frontend communicates with the FastAPI backend through Axios-based API services using JWT authentication and token refresh handling. Real-time order and notification updates are delivered through WebSockets with polling fallback support when required.
 
 ## Database Usage
 
-PostgreSQL is accessed through SQLAlchemy asyncio and asyncpg. The backend config normalizes PostgreSQL URLs to `postgresql+asyncpg://` and uses a tuned async connection pool.
-
-Primary tables:
-
-| Table | Purpose |
-| --- | --- |
-| `users` | Auth identity, role, verification, account status |
-| `students` | Student name and register number |
-| `vendors` | Vendor business profile and phone login identity |
-| `outlets` | Canteen/outlet metadata, hours, open state, UPI, Razorpay account |
-| `menu_items` | Outlet menu, pricing, availability, category, daily limit |
-| `orders` | Order lifecycle, payment state, pickup time, token, platform fee |
-| `order_items` | Snapshot of ordered menu items and quantities |
-| `ratings` | Completed-order feedback |
-| `notifications` | User notification history and read status |
-
-Indexes exist for common order, menu, notification, rating, and order-item access patterns. Startup code also applies several `IF NOT EXISTS` column/index migrations for deployment compatibility.
+PostgreSQL is used for persistent application data including users, vendors, outlets, menu items, orders, notifications, ratings, and payment-related workflows. The backend uses SQLAlchemy asyncio with asyncpg and indexed access patterns for active ordering and vendor operations.
 
 ## Redis / Realtime Usage
 
@@ -108,7 +79,7 @@ Realtime updates use FastAPI WebSockets:
 - `/api/orders/ws/student/{user_id}?token=...`
 - `/api/orders/ws/vendor/{vendor_id}?token=...`
 
-The WebSocket manager keeps active student and vendor sockets in backend process memory. The frontend also uses polling fallback for active student orders when needed.
+Realtime WebSocket connections currently use instance-local state. The frontend also uses polling fallback for active student orders when needed.
 
 ## Payment Workflow
 
@@ -157,8 +128,6 @@ Implemented and active:
 
 ## Production Optimization Notes
 
-Deployment-critical items to finalize before production GCP launch:
-
 - Finalize environment-specific deployment configuration for production.
 - Decide the production WebSocket scaling model before increasing Cloud Run instance count.
 - Centralize production secrets using GCP Secret Manager.
@@ -171,7 +140,7 @@ Backend:
 
 - Build `backend/Dockerfile` and deploy to Cloud Run.
 - Set `DATABASE_URL`, Redis, JWT, Razorpay, Resend, and app variables through Secret Manager or Cloud Run environment variables.
-- Run Alembic migrations before serving traffic. The current Docker command already runs `alembic upgrade head`.
+- Run Alembic migrations before serving traffic.
 - Use Serverless VPC Access when connecting privately to Cloud SQL or Memorystore.
 
 Database:
