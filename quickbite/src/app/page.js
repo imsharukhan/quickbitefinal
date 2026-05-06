@@ -19,7 +19,6 @@ import RegisterPage from '@/components/pages/RegisterPage';
 import ForgotPasswordPage from '@/components/pages/ForgotPasswordPage';
 import VendorForgotPage from '@/components/pages/VendorForgotPage';
 import VendorChangePasswordPage from '@/components/pages/VendorChangePasswordPage';
-import AdminPage from '@/components/pages/AdminPage';
 
 // Pages where back should go to 'home'
 const BACK_MAP = {
@@ -48,10 +47,6 @@ export default function Page() {
 
   // ── Bootstrap ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('admin=true')) {
-      setCurrentPage('admin');
-    }
-
     // Seed exactly 2 entries: [root, guard]
     // Internal nav never touches browser history — only React state
     if (typeof window !== 'undefined') {
@@ -150,7 +145,6 @@ export default function Page() {
       case 'notifications': return <NotificationsPage navigate={navigate} />;
       case 'profile':       return <ProfilePage navigate={navigate} />;
       case 'budget':        return <BudgetPage navigate={navigate} />;
-      case 'admin':         return <AdminPage />;
       default:              return <HomePage navigate={navigate} />;
     }
   };
