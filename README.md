@@ -108,10 +108,8 @@ FastAPI also integrates with Razorpay for payment order creation, signature veri
 
 ```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env
+cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -205,4 +203,4 @@ Recommended GCP mapping for the current architecture:
 ## Notes
 
 - Alembic migrations are present and the Dockerfile runs `alembic upgrade head` before starting Uvicorn.
-- WebSocket connection state is Realtime connections currently use instance-local state. For multi-instance Cloud Run scaling, use one active backend instance for WebSockets or add a shared pub/sub layer before horizontal realtime scaling.
+- Realtime connections currently use instance-local state.For multi-instance Cloud Run scaling, use one active backend instance for WebSockets or add a shared pub/sub layer before horizontal realtime scaling.

@@ -2,7 +2,7 @@
 
 ## Project Objective
 
-Grab N Go is a college food ordering and pre-order platform designed to reduce canteen queues and support student pickup workflows. The product targets college students and operational load around hundreds of concurrent order actions by separating student ordering, vendor fulfillment, payment verification, token assignment, and realtime status updates.
+Grab N Go is a college food ordering and pre-order platform designed to reduce canteen queues and support student pickup workflows. The product targets college students and operational load of hundreds of concurrent order actions by separating student ordering, vendor fulfillment, payment verification, token assignment, and realtime status updates.
 
 ## System Architecture
 
